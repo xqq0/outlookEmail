@@ -42,9 +42,10 @@ def exchange_oauth_code_for_tokens(redirected_url: str) -> Dict[str, Any]:
     if not success:
         return {'success': False, 'error': error_message}
 
+    oauth_client_id = get_oauth_client_id()
     token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     token_data = {
-        "client_id": OAUTH_CLIENT_ID,
+        "client_id": oauth_client_id,
         "code": auth_code,
         "redirect_uri": OAUTH_REDIRECT_URI,
         "grant_type": "authorization_code",
@@ -72,7 +73,7 @@ def exchange_oauth_code_for_tokens(redirected_url: str) -> Dict[str, Any]:
     return {
         'success': True,
         'refresh_token': refresh_token,
-        'client_id': OAUTH_CLIENT_ID,
+        'client_id': oauth_client_id,
         'token_type': tokens.get('token_type'),
         'expires_in': tokens.get('expires_in'),
         'scope': tokens.get('scope')
@@ -121,9 +122,10 @@ def api_get_oauth_auth_url():
     """生成 OAuth 授权 URL"""
     import urllib.parse
 
+    oauth_client_id = get_oauth_client_id()
     base_auth_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     params = {
-        "client_id": OAUTH_CLIENT_ID,
+        "client_id": oauth_client_id,
         "response_type": "code",
         "redirect_uri": OAUTH_REDIRECT_URI,
         "response_mode": "query",
@@ -135,7 +137,7 @@ def api_get_oauth_auth_url():
     return jsonify({
         'success': True,
         'auth_url': auth_url,
-        'client_id': OAUTH_CLIENT_ID,
+        'client_id': oauth_client_id,
         'redirect_uri': OAUTH_REDIRECT_URI
     })
 
@@ -587,6 +589,7 @@ def api_get_settings():
             settings['login_password_masked'] = '*' * len(pwd)
     # 返回解密后的对外 API Key
     settings['external_api_key'] = get_external_api_key()
+    settings['oauth_client_id'] = get_oauth_client_id()
     # 返回 DuckMail 设置
     settings['duckmail_base_url'] = get_duckmail_base_url()
     settings['duckmail_api_key'] = get_duckmail_api_key()
@@ -731,6 +734,19 @@ def api_update_settings():
                 updated.append('GPTMail API Key')
             else:
                 errors.append('更新 GPTMail API Key 失败')
+
+    # 更新 Microsoft OAuth Client ID
+    if 'oauth_client_id' in data:
+        oauth_client_id = str(data.get('oauth_client_id') or '').strip()
+        try:
+            uuid.UUID(oauth_client_id)
+        except (ValueError, TypeError, AttributeError):
+            errors.append('OAuth2 Client ID 必须是有效的 UUID')
+        else:
+            if set_setting('oauth_client_id', oauth_client_id):
+                updated.append('OAuth2 Client ID')
+            else:
+                errors.append('更新 OAuth2 Client ID 失败')
 
     # 更新刷新周期
     if 'refresh_interval_days' in data:

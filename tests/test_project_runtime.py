@@ -1214,6 +1214,78 @@ class ProjectRuntimeTests(unittest.TestCase):
         self.assertTrue(refreshed_payload['success'])
         self.assertEqual(refreshed_payload['settings']['show_account_sort_order'], 'false')
 
+    def test_settings_oauth_client_id_defaults_and_roundtrips(self):
+        with self.app.app_context():
+            web_outlook_app.get_db().execute(
+                "DELETE FROM settings WHERE key = 'oauth_client_id'"
+            )
+            web_outlook_app.get_db().commit()
+
+        response = self.client.get('/api/settings')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()['settings']['oauth_client_id'],
+            web_outlook_app.OAUTH_CLIENT_ID,
+        )
+
+        custom_client_id = '11111111-2222-4333-8444-555555555555'
+        update_response = self.client.put(
+            '/api/settings',
+            json={'oauth_client_id': custom_client_id},
+        )
+        self.assertTrue(update_response.get_json()['success'])
+
+        refreshed_response = self.client.get('/api/settings')
+        self.assertEqual(
+            refreshed_response.get_json()['settings']['oauth_client_id'],
+            custom_client_id,
+        )
+
+        auth_response = self.client.get('/api/oauth/auth-url')
+        self.assertEqual(auth_response.get_json()['client_id'], custom_client_id)
+
+        with self.app.app_context():
+            web_outlook_app.set_setting('oauth_client_id', web_outlook_app.OAUTH_CLIENT_ID)
+
+    def test_settings_oauth_client_id_has_dedicated_navigation_section(self):
+        template_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'templates',
+            'partials',
+            'index',
+            'dialogs-management.html',
+        )
+        with open(template_path, 'r', encoding='utf-8') as template_file:
+            settings_template = template_file.read()
+
+        self.assertIn('data-target="settingsOauthSection"', settings_template)
+        self.assertIn('id="settingsOauthSection"', settings_template)
+        self.assertEqual(settings_template.count('id="settingsOauthClientId"'), 1)
+
+        settings_js_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'index',
+            '07-settings.js',
+        )
+        with open(settings_js_path, 'r', encoding='utf-8') as settings_js_file:
+            settings_js = settings_js_file.read()
+
+        self.assertIn("addEventListener('wheel', handleSettingsSidebarWheel", settings_js)
+        self.assertIn('event.preventDefault()', settings_js)
+        self.assertIn("window.matchMedia('(min-width: 980px)')", settings_js)
+        self.assertIn("document.querySelector('#settingsModal .settings-content')", settings_js)
+
+    def test_settings_rejects_invalid_oauth_client_id(self):
+        response = self.client.put(
+            '/api/settings',
+            json={'oauth_client_id': 'not-a-client-id'},
+        )
+        payload = response.get_json()
+        self.assertFalse(payload['success'])
+        self.assertIn('UUID', payload['error'])
+
     def test_webdav_backup_settings_require_login_password_when_changed(self):
         with self.app.app_context():
             web_outlook_app.set_setting('login_password', web_outlook_app.hash_password('current-password'))

@@ -18,6 +18,12 @@
                                     </button>
                                 </li>
                                 <li>
+                                    <button type="button" class="settings-sidebar-link" data-target="settingsOauthSection" onclick="scrollSettingsSection('settingsOauthSection', this)">
+                                        <strong>OAuth2 设置</strong>
+                                        <span>Microsoft OAuth2 Client ID</span>
+                                    </button>
+                                </li>
+                                <li>
                                     <button type="button" class="settings-sidebar-link" data-target="settingsSkinSection" onclick="scrollSettingsSection('settingsSkinSection', this)">
                                         <strong>外观皮肤</strong>
                                         <span>系统级皮肤、上传包与 Git 来源</span>
@@ -124,6 +130,21 @@
                                 </div>
                             </div>
                         </section>
+
+                <section class="settings-section" id="settingsOauthSection">
+                    <div class="settings-section-head">
+                        <span class="settings-section-kicker">OAuth2</span>
+                        <h4>OAuth2 设置</h4>
+                        <p>配置 Microsoft OAuth2 授权使用的客户端应用。</p>
+                    </div>
+                    <div class="settings-panel settings-panel-grid">
+                        <div class="form-group settings-form-span-full">
+                            <label class="form-label" for="settingsOauthClientId">Microsoft OAuth2 Client ID</label>
+                            <input type="text" class="form-input" id="settingsOauthClientId" placeholder="6daa9f56-5e67-4cb6-ae52-ef89ef912d36" autocomplete="off" spellcheck="false">
+                            <div class="form-hint">用于获取 Token、重新授权和自动 OAuth 授权。默认使用项目内置 Client ID，保存后立即生效。</div>
+                        </div>
+                    </div>
+                </section>
 
                 <section class="settings-section" id="settingsSkinSection">
                     <div class="settings-section-head">

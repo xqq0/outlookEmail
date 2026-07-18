@@ -1930,6 +1930,11 @@ def init_db():
 
     cursor.execute('''
         INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('oauth_client_id', ?)
+    ''', (OAUTH_CLIENT_ID,))
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
         VALUES ('duckmail_base_url', ?)
     ''', (DUCKMAIL_BASE_URL,))
 
@@ -2524,6 +2529,16 @@ def set_setting(key: str, value: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def get_oauth_client_id() -> str:
+    """返回设置页保存的 OAuth Client ID，缺失时回退到启动配置。"""
+    try:
+        configured_client_id = get_setting('oauth_client_id', OAUTH_CLIENT_ID)
+    except RuntimeError:
+        # 纯函数测试或独立调用可能不在 Flask application context 中。
+        configured_client_id = OAUTH_CLIENT_ID
+    return str(configured_client_id or OAUTH_CLIENT_ID).strip()
 
 
 def set_setting_encrypted(key: str, value: str) -> bool:

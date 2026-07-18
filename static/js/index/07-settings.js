@@ -1,7 +1,9 @@
         /* global accountsCache, allTags, closeAllModals, closeMobilePanels, closeNavbarActionsMenu, currentGroupId, currentGroupName, deleteCurrentAccount, ensureForwardingSettingsUI, escapeHtml, formatAbsoluteDateTime, getSelectedForwardChannels, groups, handleApiError, hideEditAccountModal, hideModal, hideSettingsModal, invalidateNormalMailRetentionCaches, isTempEmailGroup, isTempImportGroup, loadAccountsByGroup, loadCloudflareChannelsForTempEmails, loadGroups, loadTempEmails, normalizeSmtpForwardProvider, refreshVisibleAccountList, setAppTimeZone, setModalVisible, setSelectedForwardChannels, setShowAccountCreatedAt, setShowAccountSortOrder, setShowGroupId, setNormalMailLocalRetentionEnabled, showConfirmModal, showModal, showToast, syncSmtpProviderUI, toggleRefreshStrategy, updateEditAccountFields, updateImportHint */
 
         // ==================== 设置相关 ====================
-        let settingsScrollSyncBound = false;
+        let settingsScrollSyncContainer = null;
+        let settingsSidebarWheelBound = false;
+        let settingsResizeSyncBound = false;
         let settingsScrollSyncFrame = 0;
         let lastLoadedWebdavBackupSettings = null;
         let cloudflareSettingsChannels = [];
@@ -244,6 +246,12 @@
 
 
         function getSettingsScrollContainer() {
+            if (window.matchMedia('(min-width: 980px)').matches) {
+                const settingsContent = document.querySelector('#settingsModal .settings-content');
+                if (settingsContent) {
+                    return settingsContent;
+                }
+            }
             return document.querySelector('#settingsModal .settings-modal-body')
                 || document.querySelector('#settingsModal .settings-modal-content');
         }
@@ -611,19 +619,43 @@
             });
         }
 
-        function ensureSettingsScrollSync() {
-            if (settingsScrollSyncBound) {
+        function handleSettingsSidebarWheel(event) {
+            const sidebarList = event.currentTarget?.querySelector('.settings-sidebar-list');
+            if (!sidebarList || sidebarList.scrollHeight <= sidebarList.clientHeight || !event.deltaY) {
                 return;
             }
 
+            // 左侧导航始终独立消费纵向滚轮事件，避免不同浏览器把事件传给右侧内容区。
+            event.preventDefault();
+            event.stopPropagation();
+            sidebarList.scrollTop += event.deltaY;
+        }
+
+        function ensureSettingsScrollSync() {
             const scrollContainer = getSettingsScrollContainer();
             if (!scrollContainer) {
                 return;
             }
 
-            scrollContainer.addEventListener('scroll', scheduleSettingsSidebarSync, { passive: true });
-            window.addEventListener('resize', scheduleSettingsSidebarSync);
-            settingsScrollSyncBound = true;
+            if (settingsScrollSyncContainer !== scrollContainer) {
+                settingsScrollSyncContainer?.removeEventListener('scroll', scheduleSettingsSidebarSync);
+                scrollContainer.addEventListener('scroll', scheduleSettingsSidebarSync, { passive: true });
+                settingsScrollSyncContainer = scrollContainer;
+            }
+
+            const settingsSidebar = document.querySelector('#settingsModal .settings-sidebar');
+            if (settingsSidebar && !settingsSidebarWheelBound) {
+                settingsSidebar.addEventListener('wheel', handleSettingsSidebarWheel, { passive: false });
+                settingsSidebarWheelBound = true;
+            }
+
+            if (!settingsResizeSyncBound) {
+                window.addEventListener('resize', () => {
+                    ensureSettingsScrollSync();
+                    scheduleSettingsSidebarSync();
+                });
+                settingsResizeSyncBound = true;
+            }
         }
 
         function scrollSettingsSection(sectionId, triggerEl = null) {
@@ -1772,6 +1804,7 @@
                     populateTimeZoneOptions(appTimeZone);
                     document.getElementById('settingsApiKey').value = data.settings.gptmail_api_key || '';
                     document.getElementById('settingsExternalApiKey').value = data.settings.external_api_key || '';
+                    document.getElementById('settingsOauthClientId').value = data.settings.oauth_client_id || '';
                     document.getElementById('settingsDuckmailBaseUrl').value = data.settings.duckmail_base_url || '';
                     document.getElementById('settingsDuckmailApiKey').value = data.settings.duckmail_api_key || '';
                     document.getElementById('settingsCloudflareAiEnabled').checked = String(data.settings.cloudflare_ai_username_enabled) === 'true';
@@ -1847,6 +1880,7 @@
             const currentPassword = document.getElementById('settingsCurrentPassword')?.value || '';
             const apiKey = document.getElementById('settingsApiKey').value.trim();
             const externalApiKey = document.getElementById('settingsExternalApiKey').value.trim();
+            const oauthClientId = document.getElementById('settingsOauthClientId').value.trim();
             const refreshDays = document.getElementById('refreshIntervalDays').value;
             const refreshDelay = document.getElementById('refreshDelaySeconds').value;
             const refreshCron = document.getElementById('refreshCron').value.trim();
@@ -1875,6 +1909,11 @@
 
             settings.gptmail_api_key = apiKey;
             settings.external_api_key = externalApiKey;
+            if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(oauthClientId)) {
+                showToast('OAuth2 Client ID 必须是有效的 UUID', 'error');
+                return;
+            }
+            settings.oauth_client_id = oauthClientId;
             settings.duckmail_base_url = document.getElementById('settingsDuckmailBaseUrl').value.trim();
             settings.duckmail_api_key = document.getElementById('settingsDuckmailApiKey').value.trim();
             settings.cloudflare_ai_username_enabled = !!document.getElementById('settingsCloudflareAiEnabled')?.checked;

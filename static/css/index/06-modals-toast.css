@@ -729,7 +729,7 @@
 
         .import-custom-imap {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 112px;
+            grid-template-columns: minmax(0, 1fr);
             gap: 12px;
         }
 
@@ -2126,28 +2126,52 @@
         }
 
         @media (min-width: 980px) {
+            .settings-modal-body {
+                display: flex;
+                overflow: hidden;
+            }
+
             .settings-shell {
                 grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+                flex: 1 1 auto;
+                width: 100%;
+                height: auto;
+                min-height: 0;
+                align-items: stretch;
             }
 
             .settings-sidebar {
-                position: sticky;
-                top: 0;
-                max-height: calc(92vh - 120px);
+                position: static;
+                height: 100%;
+                max-height: none;
                 min-height: 0;
             }
 
             .settings-sidebar-card {
-                max-height: inherit;
+                height: 100%;
+                max-height: none;
                 min-height: 0;
                 display: flex;
                 flex-direction: column;
+                overflow: hidden;
             }
 
             .settings-sidebar-list {
+                flex: 1 1 auto;
+                min-height: 0;
                 overflow-y: auto;
                 overscroll-behavior: contain;
+                scrollbar-gutter: stable;
                 scrollbar-width: thin;
+                padding-right: 4px;
+            }
+
+            .settings-content {
+                height: 100%;
+                min-height: 0;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                scrollbar-gutter: stable;
                 padding-right: 4px;
             }
         }

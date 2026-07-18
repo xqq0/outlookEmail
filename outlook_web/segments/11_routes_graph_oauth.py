@@ -123,7 +123,7 @@ def extract_graph_refresh_token(
     email: str,
     password: str,
     *,
-    client_id: str = OAUTH_CLIENT_ID,
+    client_id: Optional[str] = None,
     redirect_uri: str = OAUTH_REDIRECT_URI,
     scope: str = GRAPH_EXTRACT_SCOPE,
     authority: str = GRAPH_EXTRACT_AUTHORITY,
@@ -132,6 +132,7 @@ def extract_graph_refresh_token(
 ) -> Dict[str, Any]:
     """使用纯 HTTP OAuth2 授权码流程提取 Outlook refresh_token。"""
     try:
+        client_id = str(client_id or get_oauth_client_id()).strip()
         session = session_factory() if session_factory else requests.Session()
         session.trust_env = True
         session.headers.update({
