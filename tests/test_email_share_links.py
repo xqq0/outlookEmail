@@ -369,6 +369,9 @@ class EmailShareFrontendContractTests(unittest.TestCase):
 
     def test_share_page_contains_read_only_shell(self):
         template = pathlib.Path(ROOT_DIR, 'templates', 'email_share.html').read_text(encoding='utf-8')
+        index_template = pathlib.Path(ROOT_DIR, 'templates', 'index.html').read_text(encoding='utf-8')
+        index_layout = pathlib.Path(ROOT_DIR, 'templates', 'partials', 'index', 'layout.html').read_text(encoding='utf-8')
+        brand_logo = pathlib.Path(ROOT_DIR, 'templates', 'partials', 'mail-brand-logo.html').read_text(encoding='utf-8')
         share_js = pathlib.Path(ROOT_DIR, 'static', 'js', 'email-share.js').read_text(encoding='utf-8')
         share_css = pathlib.Path(ROOT_DIR, 'static', 'css', 'email-share.css').read_text(encoding='utf-8')
 
@@ -376,6 +379,11 @@ class EmailShareFrontendContractTests(unittest.TestCase):
         self.assertIn('shareEmailDetail', template)
         self.assertIn('<title>集成邮件查看器</title>', template)
         self.assertIn('<span class="logo-text">集成邮件查看器 ', template)
+        self.assertIn('<title>集成邮件管理</title>', index_template)
+        self.assertIn('<span class="navbar-brand-title">集成邮件管理</span>', index_layout)
+        self.assertIn('{% include "partials/mail-brand-logo.html" %}', template)
+        self.assertIn('{% include "partials/mail-brand-logo.html" %}', index_layout)
+        self.assertIn('class="mail-brand-logo"', brand_logo)
         self.assertIn('/api/share/email/', share_js)
         self.assertIn('.overlay-screen[hidden]', share_css)
         self.assertNotIn('github.com', template)

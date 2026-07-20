@@ -191,9 +191,11 @@ button {
     gap: 10px;
 }
 
-.outlook-logo {
+.mail-brand-logo {
     width: 28px;
     height: 28px;
+    flex-shrink: 0;
+    color: var(--text-primary);
 }
 
 .logo-text {
