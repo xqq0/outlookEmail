@@ -14,7 +14,7 @@
                                 <li>
                                     <button type="button" class="settings-sidebar-link is-active" data-target="settingsGeneralSection" onclick="scrollSettingsSection('settingsGeneralSection', this)">
                                         <strong>常规设置</strong>
-                                        <span>登录密码、对外 API Key、时区与列表展示</span>
+                                        <span>登录入口、密码、对外 API Key、时区与列表展示</span>
                                     </button>
                                 </li>
                                 <li>
@@ -79,18 +79,23 @@
                             <div class="settings-section-head">
                                 <span class="settings-section-kicker">General</span>
                                 <h4>常规设置</h4>
-                                <p>统一管理登录密码、对外 API Key、时区和列表展示规则。</p>
+                                <p>统一管理登录入口、密码、对外 API Key、时区和列表展示规则。</p>
                             </div>
                             <div class="settings-panel settings-panel-grid">
                                 <div class="form-group">
                                     <label class="form-label">当前登录密码</label>
-                                    <input type="password" class="form-input" id="settingsCurrentPassword" placeholder="修改密码时必填" autocomplete="current-password">
-                                    <div class="form-hint">修改登录密码时必须验证当前密码。</div>
+                                    <input type="password" class="form-input" id="settingsCurrentPassword" placeholder="修改密码或登录入口时必填" autocomplete="current-password">
+                                    <div class="form-hint">修改登录密码或登录入口时必须验证当前密码。</div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">新登录密码</label>
                                     <input type="password" class="form-input" id="settingsPassword" placeholder="输入新密码（留空则不修改）" autocomplete="new-password">
                                     <div class="form-hint">用于登录当前系统。修改成功后，其他已登录设备/会话需要重新登录。</div>
+                                </div>
+                                <div class="form-group settings-form-span-full">
+                                    <label class="form-label" for="settingsLoginEntryPath">登录入口路径</label>
+                                    <input type="text" class="form-input" id="settingsLoginEntryPath" placeholder="/login" autocomplete="off" spellcheck="false">
+                                    <div class="form-hint">例如 <code>/mail-console</code> 或 <code>/private/mail</code>。修改时需要填写上方当前登录密码；保存后旧入口立即失效，请妥善记录新路径。</div>
                                 </div>
                                 <div class="form-group settings-form-span-full">
                                     <label class="form-label">对外 API Key</label>

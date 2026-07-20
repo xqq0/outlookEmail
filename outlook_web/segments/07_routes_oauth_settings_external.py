@@ -608,6 +608,7 @@ def api_get_settings():
     settings['cloudflare_ai_username_api_key_configured'] = bool(cloudflare_ai_api_key)
     settings['cloudflare_ai_username_api_key_masked'] = '********' if cloudflare_ai_api_key else ''
     settings['app_timezone'] = get_app_timezone()
+    settings['login_entry_path'] = get_login_entry_path()
     settings['show_account_created_at'] = get_setting('show_account_created_at', 'true')
     settings['show_account_sort_order'] = get_setting('show_account_sort_order', 'false')
     settings['show_group_id'] = get_setting('show_group_id', 'true')
@@ -726,6 +727,23 @@ def api_update_settings():
             session.permanent = True
             bind_login_session_version(new_session_version)
             updated.append('登录密码')
+
+    if 'login_entry_path' in data:
+        try:
+            login_entry_path = normalize_login_entry_path(data.get('login_entry_path'))
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)})
+
+        if login_entry_path != get_login_entry_path():
+            current_password = str(data.get('current_login_password') or '')
+            if not current_password:
+                return jsonify({'success': False, 'error': '修改登录入口需要验证当前登录密码'})
+            if not verify_login_password(current_password):
+                return jsonify({'success': False, 'error': '当前登录密码错误'})
+            if set_setting('login_entry_path', login_entry_path):
+                updated.append('登录入口')
+            else:
+                errors.append('更新登录入口失败')
 
     # 更新 GPTMail API Key
     if 'gptmail_api_key' in data:

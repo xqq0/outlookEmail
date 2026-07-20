@@ -36,6 +36,10 @@ class ProjectRuntimeTests(unittest.TestCase):
                 web_outlook_app.LOGIN_SESSION_VERSION_SETTING_KEY,
                 web_outlook_app.DEFAULT_LOGIN_SESSION_VERSION,
             )
+            web_outlook_app.set_setting(
+                'login_entry_path',
+                web_outlook_app.DEFAULT_LOGIN_ENTRY_PATH,
+            )
             db = web_outlook_app.get_db()
             db.execute('DELETE FROM project_account_events')
             db.execute('DELETE FROM project_accounts')
@@ -637,6 +641,87 @@ class ProjectRuntimeTests(unittest.TestCase):
         payload = response.get_json()
         self.assertFalse(payload['success'])
         self.assertEqual(payload['error'], '密码错误')
+
+    def test_anonymous_root_renders_public_landing_page(self):
+        anonymous_client = self.app.test_client()
+
+        response = anonymous_client.get('/', follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('集成邮件查看器', response.get_data(as_text=True))
+        self.assertNotIn('/login', response.get_data(as_text=True))
+        self.assertIsNone(response.headers.get('Location'))
+
+    def test_login_entry_path_can_be_customized_and_old_entry_is_disabled(self):
+        custom_password = 'entry-path-password'
+        with self.app.app_context():
+            original_password = web_outlook_app.get_setting('login_password')
+            web_outlook_app.set_setting(
+                'login_password',
+                web_outlook_app.hash_password(custom_password),
+            )
+
+        try:
+            update_response = self.client.put('/api/settings', json={
+                'login_entry_path': '/private/mail-console',
+                'current_login_password': custom_password,
+            })
+            self.assertEqual(update_response.status_code, 200)
+            self.assertTrue(update_response.get_json()['success'])
+
+            settings_response = self.client.get('/api/settings')
+            self.assertEqual(
+                settings_response.get_json()['settings']['login_entry_path'],
+                '/private/mail-console',
+            )
+
+            anonymous_client = self.app.test_client()
+            self.assertEqual(anonymous_client.get('/login').status_code, 404)
+
+            custom_entry_response = anonymous_client.get('/private/mail-console')
+            self.assertEqual(custom_entry_response.status_code, 200)
+            self.assertIn('集成邮件查看器', custom_entry_response.get_data(as_text=True))
+
+            login_response = anonymous_client.post(
+                '/private/mail-console',
+                json={'password': custom_password},
+            )
+            self.assertEqual(login_response.status_code, 200)
+            self.assertTrue(login_response.get_json()['success'])
+            self.assertIn('emailList', anonymous_client.get('/').get_data(as_text=True))
+
+            logout_response = anonymous_client.get('/logout', follow_redirects=False)
+            self.assertEqual(logout_response.status_code, 302)
+            self.assertTrue(
+                logout_response.headers['Location'].endswith('/private/mail-console')
+            )
+        finally:
+            with self.app.app_context():
+                web_outlook_app.set_setting('login_password', original_password)
+                web_outlook_app.set_setting(
+                    'login_entry_path',
+                    web_outlook_app.DEFAULT_LOGIN_ENTRY_PATH,
+                )
+
+    def test_login_entry_path_rejects_reserved_system_routes(self):
+        with self.app.app_context():
+            original_password = web_outlook_app.get_setting('login_password')
+            web_outlook_app.set_setting(
+                'login_password',
+                web_outlook_app.hash_password('reserved-path-password'),
+            )
+
+        try:
+            response = self.client.put('/api/settings', json={
+                'login_entry_path': '/api/private-login',
+                'current_login_password': 'reserved-path-password',
+            })
+            payload = response.get_json()
+            self.assertFalse(payload['success'])
+            self.assertIn('保留路径', payload['error'])
+        finally:
+            with self.app.app_context():
+                web_outlook_app.set_setting('login_password', original_password)
 
     def test_extension_login_launch_url_sets_session_once(self):
         with self.app.app_context():

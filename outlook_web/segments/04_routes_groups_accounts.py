@@ -13,6 +13,13 @@ if TYPE_CHECKING:
 @csrf_exempt  # 登录接口排除CSRF保护（用户未登录时无法获取token）
 def login():
     """登录页面"""
+    if get_login_entry_path() != DEFAULT_LOGIN_ENTRY_PATH:
+        abort(404)
+    return handle_login_request()
+
+
+def handle_login_request():
+    """Handle login GET/POST requests for the configured entry path."""
     if request.method == 'POST':
         try:
             # 获取客户端 IP
@@ -54,11 +61,24 @@ def login():
     return render_template('login.html')
 
 
+@app.before_request
+def serve_custom_login_entry():
+    """Serve the login form only when the request exactly matches its configured path."""
+    configured_path = get_login_entry_path()
+    if (
+        configured_path != DEFAULT_LOGIN_ENTRY_PATH
+        and request.path.rstrip('/') == configured_path
+        and request.method in {'GET', 'POST'}
+    ):
+        return handle_login_request()
+    return None
+
+
 @app.route('/logout')
 def logout():
     """退出登录"""
     clear_web_login_session()
-    return redirect(url_for('login'))
+    return redirect(get_login_entry_path())
 
 
 extension_login_tokens = {}
@@ -130,11 +150,11 @@ def extension_login(token):
     prune_extension_login_tokens()
     payload = extension_login_tokens.pop(str(token or ''), None)
     if not payload:
-        return redirect(url_for('login'))
+        return redirect(get_login_entry_path())
 
     token_version = str(payload.get('login_session_version') or DEFAULT_LOGIN_SESSION_VERSION)
     if token_version != get_login_session_version():
-        return redirect(url_for('login'))
+        return redirect(get_login_entry_path())
 
     establish_web_login_session()
     return redirect(normalize_extension_next_path(request.args.get('next') or payload.get('next') or '/'))
@@ -182,9 +202,15 @@ def active_skin_css():
 
 
 @app.route('/')
-@login_required
 def index():
-    """主页"""
+    """Public landing page for visitors and the management UI for signed-in users."""
+    if not is_web_login_session_valid():
+        if session.get('logged_in'):
+            clear_web_login_session()
+        response = make_response(render_template('landing.html'))
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+
     response = make_response(render_template(
         'index.html',
         app_version=APP_VERSION,

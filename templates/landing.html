@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="集成邮件查看器，专注于安全、清晰的多邮箱聚合阅读体验。">
+    <title>集成邮件查看器</title>
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+</head>
+<body>
+    <main class="landing-shell">
+        <nav class="landing-nav" aria-label="站点导航">
+            <a class="brand" href="/" aria-label="集成邮件查看器首页">
+                <span class="brand-mark" aria-hidden="true">M</span>
+                <span>集成邮件查看器</span>
+            </a>
+            <span class="nav-status"><i aria-hidden="true"></i> 服务在线</span>
+        </nav>
+
+        <section class="hero">
+            <div class="hero-copy">
+                <span class="eyebrow">INTEGRATED MAIL VIEWER</span>
+                <h1>一处查看，<br><span>每一封重要邮件。</span></h1>
+                <p class="hero-lead">把分散的邮箱汇集成安静、有序的阅读空间。专注内容，快速检索，让重要信息始终清晰可见。</p>
+                <div class="feature-row" aria-label="产品特点">
+                    <div><strong>聚合</strong><span>多邮箱统一查看</span></div>
+                    <div><strong>高效</strong><span>快速检索与筛选</span></div>
+                    <div><strong>安全</strong><span>私有化数据管理</span></div>
+                </div>
+            </div>
+
+            <div class="viewer-stage" aria-label="邮件查看器界面示意">
+                <div class="ambient ambient-one"></div>
+                <div class="ambient ambient-two"></div>
+                <div class="viewer-window">
+                    <div class="window-bar">
+                        <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+                        <span>邮件收件箱</span>
+                        <span class="window-live">已同步</span>
+                    </div>
+                    <div class="viewer-body">
+                        <aside class="viewer-sidebar" aria-hidden="true">
+                            <span class="mini-logo">M</span>
+                            <i class="active"></i><i></i><i></i><i></i>
+                        </aside>
+                        <div class="message-list">
+                            <div class="search-line"></div>
+                            <article class="message active">
+                                <span class="avatar coral">A</span>
+                                <div><b>项目进展同步</b><small>今天的里程碑已经完成，请查收最新摘要。</small></div>
+                                <time>09:42</time>
+                            </article>
+                            <article class="message">
+                                <span class="avatar blue">D</span>
+                                <div><b>设计评审邀请</b><small>新版本界面已经准备好，期待你的反馈。</small></div>
+                                <time>08:16</time>
+                            </article>
+                            <article class="message">
+                                <span class="avatar mint">S</span>
+                                <div><b>每周数据报告</b><small>本周邮件处理效率提升了 24%。</small></div>
+                                <time>昨天</time>
+                            </article>
+                        </div>
+                        <article class="message-preview">
+                            <span class="preview-kicker">收件箱 / 项目</span>
+                            <h2>项目进展同步</h2>
+                            <div class="sender"><span class="avatar coral">A</span><p><b>Alex Chen</b><small>alex@example.com</small></p></div>
+                            <div class="preview-copy"><span></span><span></span><span></span><span class="short"></span></div>
+                            <div class="summary-card"><b>今日摘要</b><p>关键里程碑已完成，所有任务均按计划推进。</p></div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <span>© 集成邮件查看器</span>
+            <span>清晰阅读 · 安全管理 · 高效协作</span>
+        </footer>
+    </main>
+</body>
+</html>

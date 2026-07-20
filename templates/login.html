@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - Outlook 邮件管理</title>
+    <title>登录 - 集成邮件查看器</title>
     <style>
         * {
             margin: 0;
@@ -135,7 +135,7 @@
                     <polyline points="22,6 12,13 2,6"></polyline>
                 </svg>
             </div>
-            <h1 class="login-title">Outlook 邮件管理</h1>
+            <h1 class="login-title">集成邮件查看器</h1>
             <p class="login-subtitle">请输入密码登录系统</p>
         </div>
         
@@ -169,7 +169,7 @@
             errorMessage.classList.remove('show');
             
             try {
-                const response = await fetch('/login', {
+                const response = await fetch(window.location.pathname, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password })

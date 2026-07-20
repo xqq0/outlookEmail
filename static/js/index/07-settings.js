@@ -1818,6 +1818,12 @@
                     document.getElementById('settingsCloudflareAiTestResult').textContent = '未测试';
                     document.getElementById('settingsAppTimezone').value = appTimeZone;
                     document.getElementById('settingsPassword').value = '';
+                    const loginEntryInput = document.getElementById('settingsLoginEntryPath');
+                    if (loginEntryInput) {
+                        const loginEntryPath = data.settings.login_entry_path || '/login';
+                        loginEntryInput.value = loginEntryPath;
+                        loginEntryInput.dataset.originalValue = loginEntryPath;
+                    }
                     const currentPasswordInput = document.getElementById('settingsCurrentPassword');
                     if (currentPasswordInput) currentPasswordInput.value = '';
 
@@ -1879,6 +1885,9 @@
             ensureForwardingSettingsUI();
             const password = document.getElementById('settingsPassword').value;
             const currentPassword = document.getElementById('settingsCurrentPassword')?.value || '';
+            const loginEntryInput = document.getElementById('settingsLoginEntryPath');
+            const loginEntryPath = loginEntryInput?.value.trim() || '/login';
+            const originalLoginEntryPath = loginEntryInput?.dataset.originalValue || '/login';
             const apiKey = document.getElementById('settingsApiKey').value.trim();
             const externalApiKey = document.getElementById('settingsExternalApiKey').value.trim();
             const oauthClientId = document.getElementById('settingsOauthClientId').value.trim();
@@ -1905,6 +1914,20 @@
                     return;
                 }
                 settings.login_password = password;
+                settings.current_login_password = currentPassword;
+            }
+
+            if (!/^\/[A-Za-z0-9][A-Za-z0-9_-]*(?:\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/.test(loginEntryPath)
+                || loginEntryPath.length > 128) {
+                showToast('登录入口格式无效，请使用以 / 开头的字母、数字、短横线或下划线路径', 'error');
+                return;
+            }
+            settings.login_entry_path = loginEntryPath;
+            if (loginEntryPath !== originalLoginEntryPath) {
+                if (!currentPassword) {
+                    showToast('修改登录入口需要输入当前登录密码', 'error');
+                    return;
+                }
                 settings.current_login_password = currentPassword;
             }
 
@@ -2172,6 +2195,8 @@
 
             if (password) {
                 showToast('登录密码已更新，其他已登录设备需要重新登录', 'success');
+            } else if (loginEntryPath !== originalLoginEntryPath) {
+                showToast(`登录入口已更新为 ${loginEntryPath}，请妥善保存`, 'success');
             } else {
                 showToast('时间展示已生效，定时任务重启后生效', 'success');
             }

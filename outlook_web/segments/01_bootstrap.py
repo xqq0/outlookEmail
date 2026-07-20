@@ -35,7 +35,7 @@ from pathlib import Path, PurePosixPath
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote, urlparse, unquote
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, jsonify, g, session, redirect, url_for, Response, make_response
+from flask import Flask, render_template, request, jsonify, g, session, redirect, url_for, Response, make_response, abort
 from functools import wraps
 import requests
 from cryptography.fernet import Fernet
@@ -124,6 +124,13 @@ else:
 
 # 登录密码配置（可以修改为你想要的密码）
 LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "admin123")
+DEFAULT_LOGIN_ENTRY_PATH = '/login'
+LOGIN_ENTRY_PATH_PATTERN = re.compile(
+    r'^/[A-Za-z0-9][A-Za-z0-9_-]*(?:/[A-Za-z0-9][A-Za-z0-9_-]*)*$'
+)
+LOGIN_ENTRY_RESERVED_PREFIXES = {
+    'api', 'assets', 'extension-login', 'favicon.ico', 'logout', 'share', 'static'
+}
 
 # ==================== 配置 ====================
 # Token 端点
@@ -1931,6 +1938,11 @@ def init_db():
 
     cursor.execute('''
         INSERT OR IGNORE INTO settings (key, value)
+        VALUES ('login_entry_path', ?)
+    ''', (DEFAULT_LOGIN_ENTRY_PATH,))
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO settings (key, value)
         VALUES ('oauth_client_id', ?)
     ''', (OAUTH_CLIENT_ID,))
 
@@ -2534,6 +2546,33 @@ def set_setting(key: str, value: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def normalize_login_entry_path(value: Any) -> str:
+    """Validate and normalize the configurable, non-public login URL path."""
+    candidate = str(value or '').strip()
+    if not candidate:
+        candidate = DEFAULT_LOGIN_ENTRY_PATH
+    if not candidate.startswith('/'):
+        candidate = f'/{candidate}'
+    candidate = candidate.rstrip('/') or DEFAULT_LOGIN_ENTRY_PATH
+
+    if len(candidate) > 128 or not LOGIN_ENTRY_PATH_PATTERN.fullmatch(candidate):
+        raise ValueError('登录入口仅支持字母、数字、短横线、下划线和路径分隔符，最长 128 个字符')
+
+    first_segment = candidate.lstrip('/').split('/', 1)[0].lower()
+    if first_segment in LOGIN_ENTRY_RESERVED_PREFIXES:
+        raise ValueError('登录入口与系统保留路径冲突，请更换路径')
+    return candidate
+
+
+def get_login_entry_path() -> str:
+    try:
+        return normalize_login_entry_path(
+            get_setting('login_entry_path', DEFAULT_LOGIN_ENTRY_PATH)
+        )
+    except (RuntimeError, ValueError):
+        return DEFAULT_LOGIN_ENTRY_PATH
 
 
 def get_oauth_client_id() -> str:

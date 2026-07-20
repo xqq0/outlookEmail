@@ -2342,7 +2342,7 @@ def login_required(f):
                 clear_web_login_session()
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'success': False, 'error': '请先登录', 'need_login': True}), 401
-            return redirect(url_for('login'))
+            return redirect(get_login_entry_path())
         return f(*args, **kwargs)
     decorated_function._requires_login = True
     return decorated_function
