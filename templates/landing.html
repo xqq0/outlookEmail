@@ -3,81 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="集成邮件查看器，专注于安全、清晰的多邮箱聚合阅读体验。">
-    <title>集成邮件查看器</title>
+    <title>非凡的多邮箱管理系统</title>
     <link rel="icon" href="{{ url_for('favicon') }}" type="image/svg+xml">
+    <script>
+        (function () {
+            var theme;
+            try { theme = localStorage.getItem('landing-theme'); } catch (e) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
 </head>
 <body>
-    <main class="landing-shell">
-        <nav class="landing-nav" aria-label="站点导航">
-            <a class="brand" href="/" aria-label="集成邮件查看器首页">
-                <span class="brand-mark" aria-hidden="true">M</span>
-                <span>集成邮件查看器</span>
+    <div class="shell">
+        <nav class="top-nav" aria-label="站点导航">
+            <a class="brand" href="/" aria-label="非凡的多邮箱管理系统首页">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="2.4" y="4.4" width="19.2" height="15.2" rx="3.8" stroke="currentColor"></rect>
+                        <path class="lg1" d="M2.4 8.2 C 6.4 8.2, 9 10.4, 12 13.1"></path>
+                        <path class="lg2" d="M12 4.4 V 13.1"></path>
+                        <path class="lg3" d="M21.6 8.2 C 17.6 8.2, 15 10.4, 12 13.1"></path>
+                        <circle class="lg-node" cx="12" cy="13.1" r="1.5"></circle>
+                    </svg>
+                </span>
+                <span class="brand-name">非凡的多邮箱管理系统</span>
             </a>
-            <span class="nav-status"><i aria-hidden="true"></i> 服务在线</span>
+            <div class="nav-side">
+                <span class="nav-status"><i aria-hidden="true"></i>服务在线</span>
+                <button class="theme-toggle" type="button" id="themeToggle" aria-label="切换明暗主题">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4.4"></circle>
+                        <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"></path>
+                    </svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </div>
         </nav>
 
-        <section class="hero">
-            <div class="hero-copy">
-                <span class="eyebrow">INTEGRATED MAIL VIEWER</span>
-                <h1>一处查看，<br><span>每一封重要邮件。</span></h1>
-                <p class="hero-lead">把分散的邮箱汇集成安静、有序的阅读空间。专注内容，快速检索，让重要信息始终清晰可见。</p>
-                <div class="feature-row" aria-label="产品特点">
-                    <div><strong>聚合</strong><span>多邮箱统一查看</span></div>
-                    <div><strong>高效</strong><span>快速检索与筛选</span></div>
-                    <div><strong>安全</strong><span>私有化数据管理</span></div>
-                </div>
-            </div>
+        <main>
+            <section class="hero">
+                <h1>再多的邮箱<br>一个<em>调度台</em>足以</h1>
+                <p class="hero-lead">非凡的多邮箱管理系统把 Outlook、企业邮箱与临时邮箱统一接入你自己的服务器：持续同步、分组归档、跨账户检索、独立分享，所有邮件数据都留在你手里。</p>
+            </section>
 
-            <div class="viewer-stage" aria-label="邮件查看器界面示意">
-                <div class="ambient ambient-one"></div>
-                <div class="ambient ambient-two"></div>
-                <div class="viewer-window">
-                    <div class="window-bar">
-                        <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
-                        <span>邮件收件箱</span>
-                        <span class="window-live">已同步</span>
-                    </div>
-                    <div class="viewer-body">
-                        <aside class="viewer-sidebar" aria-hidden="true">
-                            <span class="mini-logo">M</span>
-                            <i class="active"></i><i></i><i></i><i></i>
-                        </aside>
-                        <div class="message-list">
-                            <div class="search-line"></div>
-                            <article class="message active">
-                                <span class="avatar coral">A</span>
-                                <div><b>项目进展同步</b><small>今天的里程碑已经完成，请查收最新摘要。</small></div>
-                                <time>09:42</time>
-                            </article>
-                            <article class="message">
-                                <span class="avatar blue">D</span>
-                                <div><b>设计评审邀请</b><small>新版本界面已经准备好，期待你的反馈。</small></div>
-                                <time>08:16</time>
-                            </article>
-                            <article class="message">
-                                <span class="avatar mint">S</span>
-                                <div><b>每周数据报告</b><small>本周邮件处理效率提升了 24%。</small></div>
-                                <time>昨天</time>
-                            </article>
+            <section class="stage-wrap" aria-label="多邮箱汇聚进调度台示意">
+                <div class="stage">
+                    <div class="agg-sources">
+                        <div class="source">
+                            <i class="dot ch1" aria-hidden="true"></i>
+                            <div class="source-copy"><b>Outlook · OAuth</b><small>Graph 同步正常</small></div>
+                            <span class="source-state">已连接</span>
                         </div>
-                        <article class="message-preview">
-                            <span class="preview-kicker">收件箱 / 项目</span>
-                            <h2>项目进展同步</h2>
-                            <div class="sender"><span class="avatar coral">A</span><p><b>Alex Chen</b><small>alex@example.com</small></p></div>
-                            <div class="preview-copy"><span></span><span></span><span></span><span class="short"></span></div>
-                            <div class="summary-card"><b>今日摘要</b><p>关键里程碑已完成，所有任务均按计划推进。</p></div>
-                        </article>
+                        <div class="source">
+                            <i class="dot ch2" aria-hidden="true"></i>
+                            <div class="source-copy"><b>IMAP · 企业邮箱</b><small>993 · SSL</small></div>
+                            <span class="source-state">已连接</span>
+                        </div>
+                        <div class="source">
+                            <i class="dot ch3" aria-hidden="true"></i>
+                            <div class="source-copy"><b>临时邮箱</b><small>按需生成 · 用完即弃</small></div>
+                            <span class="source-state">已连接</span>
+                        </div>
+
+                        <svg class="flowlines flowlines-mobile-rail" viewBox="0 0 22 300" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="p1" d="M22 45 H4 V300"></path>
+                            <path class="p2" d="M22 150 H8 V300"></path>
+                            <path class="p3" d="M22 255 H12 V300"></path>
+                        </svg>
+                    </div>
+
+                    <svg class="flowlines flowlines-horizontal" viewBox="0 0 110 320" preserveAspectRatio="none" aria-hidden="true">
+                        <path class="p1" d="M0 54 C 62 54, 48 160, 110 160"></path>
+                        <path class="p2" d="M0 160 L 110 160"></path>
+                        <path class="p3" d="M0 266 C 62 266, 48 160, 110 160"></path>
+                    </svg>
+
+                    <svg class="flowlines flowlines-vertical" viewBox="0 0 660 76" preserveAspectRatio="none" aria-hidden="true">
+                        <path class="p1" d="M110 0 C 110 38, 330 36, 330 76"></path>
+                        <path class="p2" d="M330 0 L 330 76"></path>
+                        <path class="p3" d="M550 0 C 550 38, 330 36, 330 76"></path>
+                    </svg>
+
+                    <svg class="flowlines flowlines-mobile-tail" viewBox="0 0 330 60" preserveAspectRatio="none" aria-hidden="true">
+                        <path class="p1" d="M4 0 C 4 30, 165 25, 165 60"></path>
+                        <path class="p2" d="M8 0 C 8 34, 165 28, 165 60"></path>
+                        <path class="p3" d="M12 0 C 12 38, 165 31, 165 60"></path>
+                    </svg>
+
+                    <div class="console" role="img" aria-label="统一收件箱三栏界面示意">
+                        <div class="console-bar">
+                            <span class="win-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                            <span class="console-title">调度台 · 统一收件箱</span>
+                            <span class="console-sync"><i aria-hidden="true"></i>22 账户 · 已同步</span>
+                        </div>
+                        <div class="console-body">
+                            <aside class="pane-nav" aria-hidden="true">
+                                <p class="pane-label">分组</p>
+                                <ul>
+                                    <li class="on"><i class="dot ch1"></i>全部邮件<span>128</span></li>
+                                    <li><i class="dot ch3"></i>运营团队<span>12</span></li>
+                                    <li><i class="dot ch3"></i>客服信箱<span>6</span></li>
+                                    <li><i class="dot ch3"></i>采购通知<span>4</span></li>
+                                </ul>
+                                <p class="pane-label">通道</p>
+                                <ul>
+                                    <li><i class="dot ch1"></i>Outlook · Graph</li>
+                                    <li><i class="dot ch2"></i>IMAP · SSL</li>
+                                </ul>
+                            </aside>
+
+                            <div class="pane-list" aria-hidden="true">
+                                <div class="fake-search">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                                    在 22 个账户中检索…
+                                </div>
+                                <article class="mail active">
+                                    <i class="dot ch1"></i>
+                                    <div class="mail-copy"><b>安全验证代码</b><small>Microsoft 账户团队 · 你的一次性验证代码</small></div>
+                                    <time>09:42</time>
+                                </article>
+                                <article class="mail">
+                                    <i class="dot ch2"></i>
+                                    <div class="mail-copy"><b>服务器巡检报告</b><small>运维通知 · 本周所有节点运行正常</small></div>
+                                    <time>08:16</time>
+                                </article>
+                                <article class="mail">
+                                    <i class="dot ch3"></i>
+                                    <div class="mail-copy"><b>渠道周报汇总</b><small>运营团队 · 12 个账户的新邮件已归入分组</small></div>
+                                    <time>昨天</time>
+                                </article>
+                                <article class="mail">
+                                    <i class="dot ch1"></i>
+                                    <div class="mail-copy"><b>订阅确认</b><small>service@example.com · 感谢确认订阅</small></div>
+                                    <time>昨天</time>
+                                </article>
+                            </div>
+
+                            <div class="pane-read" aria-hidden="true">
+                                <h3 class="read-subject">安全验证代码</h3>
+                                <p class="read-meta"><span>发件人 <b>Microsoft 账户团队</b></span><span>09:42</span></p>
+                                <div class="read-body">
+                                    <p>你好，你正在验证登录。你的一次性验证代码是 <span class="code">428190</span>，十分钟内有效。</p>
+                                </div>
+                                <div class="share-chip">
+                                    <span class="share-state"><i aria-hidden="true"></i>分享链接已生成</span>
+                                    <code>…/share/e9f2c17a</code>
+                                    <span class="share-note">对方无需账号，打开链接即可阅读这封邮件。</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
+
+            <section class="features" aria-label="系统能力">
+                <header class="section-head">
+                    <span class="kicker">CAPABILITIES</span>
+                    <h2>为多邮箱而生的管理能力</h2>
+                    <p>从接入到分享，每一项能力都对应调度台里的一个真实动作。</p>
+                </header>
+                <div class="card-grid">
+                    <article class="card">
+                        <span class="card-tag t1"><i aria-hidden="true"></i>OAUTH / IMAP</span>
+                        <h3>多协议接入</h3>
+                        <p>Outlook OAuth 与 IMAP 双通道接入，一次配置，持续同步。</p>
+                    </article>
+                    <article class="card">
+                        <span class="card-tag t3"><i aria-hidden="true"></i>GROUPS</span>
+                        <h3>分组管理</h3>
+                        <p>按团队或用途归组账户，连接状态与批量刷新一目了然。</p>
+                    </article>
+                    <article class="card">
+                        <span class="card-tag t2"><i aria-hidden="true"></i>SEARCH</span>
+                        <h3>跨账户检索</h3>
+                        <p>在所有邮箱里同时搜索，按账户、时间与关键词快速过滤。</p>
+                    </article>
+                    <article class="card">
+                        <span class="card-tag t1"><i aria-hidden="true"></i>SHARE</span>
+                        <h3>安全分享</h3>
+                        <p>为单封邮件生成独立分享页，对方无需账号即可阅读。</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="route" aria-label="一封邮件的旅程">
+                <header class="section-head">
+                    <span class="kicker">MAIL ROUTE</span>
+                    <h2>一封邮件的旅程</h2>
+                    <p>从接入到递出，邮路上的四个站点。</p>
+                </header>
+                <ol class="rail">
+                    <li>
+                        <span class="stamp" aria-hidden="true"></span>
+                        <span class="step-no">01</span>
+                        <b>接入</b>
+                        <p>完成 OAuth 授权，或填写 IMAP 配置，邮箱进入调度台。</p>
+                    </li>
+                    <li>
+                        <span class="stamp" aria-hidden="true"></span>
+                        <span class="step-no">02</span>
+                        <b>聚合</b>
+                        <p>系统持续同步，新邮件自动汇入统一收件箱与所属分组。</p>
+                    </li>
+                    <li>
+                        <span class="stamp" aria-hidden="true"></span>
+                        <span class="step-no">03</span>
+                        <b>检索</b>
+                        <p>跨账户搜索与筛选，直达要找的那一封。</p>
+                    </li>
+                    <li>
+                        <span class="stamp" aria-hidden="true"></span>
+                        <span class="step-no">04</span>
+                        <b>递出</b>
+                        <p>生成独立分享链接，把单封邮件安全递到对方手里。</p>
+                    </li>
+                </ol>
+            </section>
+        </main>
 
         <footer>
-            <span>© 集成邮件查看器</span>
-            <span>清晰阅读 · 安全管理 · 高效协作</span>
+            <span>© 非凡的多邮箱管理系统</span>
+            <span>多邮箱聚合 · 自托管 · 数据自持</span>
         </footer>
-    </main>
+    </div>
+
+    <script>
+        document.getElementById('themeToggle').addEventListener('click', function () {
+            var root = document.documentElement;
+            var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+            root.dataset.theme = next;
+            try { localStorage.setItem('landing-theme', next); } catch (e) {}
+        });
+    </script>
 </body>
 </html>

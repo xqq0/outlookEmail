@@ -648,7 +648,7 @@ class ProjectRuntimeTests(unittest.TestCase):
         response = anonymous_client.get('/', follow_redirects=False)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('集成邮件查看器', response.get_data(as_text=True))
+        self.assertIn('非凡的多邮箱管理系统', response.get_data(as_text=True))
         self.assertNotIn('/login', response.get_data(as_text=True))
         self.assertIsNone(response.headers.get('Location'))
 
