@@ -680,7 +680,7 @@ class ProjectRuntimeTests(unittest.TestCase):
 
             custom_entry_response = anonymous_client.get('/private/mail-console')
             self.assertEqual(custom_entry_response.status_code, 200)
-            self.assertIn('集成邮件查看器', custom_entry_response.get_data(as_text=True))
+            self.assertIn('非凡的多邮箱管理系统', custom_entry_response.get_data(as_text=True))
 
             login_response = anonymous_client.post(
                 '/private/mail-console',

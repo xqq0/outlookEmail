@@ -48,9 +48,6 @@ openspec
 待办
 /.playwright-cli
 .test_tmp/
-/.trellis/*
-!/.trellis/workflow.md
-!/.trellis/spec/
-!/.trellis/spec/*.md
+/.trellis/
 /scripts/compare_accounts_db.py
 /scripts/export_accounts.py
