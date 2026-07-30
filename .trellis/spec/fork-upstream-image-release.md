@@ -35,7 +35,7 @@ After every upstream sync, these behaviors must still work:
 
 - Unauthenticated `GET /` returns the public landing page, not a redirect to `/login`.
 - Authenticated `GET /` returns the admin UI.
-- The public landing page uses `集成邮件查看器`.
+- The public landing page uses `非凡的多邮箱管理系统`.
 - Login page uses `集成邮件查看器`.
 - Admin UI uses `集成邮件管理`.
 - Share page uses `集成邮件查看器`.
@@ -189,7 +189,7 @@ At minimum, verify the product contract:
 
 - [ ] Unauthenticated `/` shows the public landing page.
 - [ ] Authenticated `/` shows admin UI.
-- [ ] Landing page displays `集成邮件查看器`.
+- [ ] Landing page displays `非凡的多邮箱管理系统`.
 - [ ] Login page displays `集成邮件查看器`.
 - [ ] Admin UI displays `集成邮件管理`.
 - [ ] Share page displays `集成邮件查看器`.
@@ -329,4 +329,3 @@ Stop and ask the user before proceeding if:
 - GitHub Actions is building from the wrong commit.
 - GHCR package points to the wrong repository.
 - The worktree contains unrelated user changes that must be moved, stashed, or committed.
-

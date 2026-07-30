@@ -27,11 +27,11 @@ The fork has custom behavior that must not be overwritten by upstream merges:
 - Configurable login entry path.
 - Configurable Microsoft OAuth Client ID.
 - Admin brand text: `集成邮件管理`.
-- Landing, login, and share brand text: `集成邮件查看器`.
+- Landing brand text: `非凡的多邮箱管理系统`.
+- Login and share brand text: `集成邮件查看器`.
 - Share page must not contain GitHub buttons or GitHub links.
 - Admin and share pages use the shared logo partial.
 
 Canonical long-form record:
 
 `/Users/qxq/qxq/qxq笔记/集成邮件管理系统/Fork定制差异与上游同步保护.md`
-
