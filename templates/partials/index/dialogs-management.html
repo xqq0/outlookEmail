@@ -990,7 +990,7 @@
                     <label class="form-label">账号代理</label>
                     <input type="text" class="form-input" id="batchProxyUrl"
                         placeholder="socks5://host:port、http://host:port 或 direct">
-                    <div class="form-hint">应用到已勾选账号；留空并提交会清空账号级代理，改为继承分组代理。建议优先使用 <code>socks5://</code>：IMAP 令牌请求仅支持 HTTPS CONNECT / SOCKS5 代理，普通 HTTP 代理不可用。</div>
+                    <div class="form-hint">应用到已勾选账号；留空并提交会清空账号级代理，改为继承分组代理。支持 <code>{mail}</code> 占位符。建议优先使用 <code>socks5h://</code>：IMAP 令牌请求仅支持 HTTPS CONNECT / SOCKS5 代理，普通 HTTP 代理不可用。</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">回退代理 1</label>
@@ -1179,14 +1179,14 @@
 
     <!-- Outlook 上传账号模态框 -->
     <div class="modal" id="outlookUploadAccountsModal" onmousedown="if(event.target === this) hideOutlookUploadAccountsModal()">
-        <div class="modal-content" style="width: min(1500px, 96vw);">
+        <div class="modal-content" style="width: min(1740px, 96vw);">
             <div class="modal-header">
                 <h3>Outlook邮箱授权</h3>
                 <button class="modal-close" onclick="hideOutlookUploadAccountsModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="upload-accounts-guide">
-                    <details class="upload-accounts-guide__details" open>
+                    <details class="upload-accounts-guide__details">
                         <summary class="upload-accounts-guide__summary">
                             找不到批量导入？四种添加 / 授权方式说明（入口与区别）
                         </summary>
@@ -1195,7 +1195,7 @@
                                 <div class="upload-accounts-guide__item upload-accounts-guide__item--current">
                                     <div class="upload-accounts-guide__item-title">① 当前页：Outlook邮箱授权</div>
                                     <div class="upload-accounts-guide__item-entry">入口：顶部导航「Outlook 邮箱」图标 / 移动端「Outlook 邮箱」按钮</div>
-                                    <div class="upload-accounts-guide__item-desc">只填邮箱+密码，由系统自动化登录微软完成 Graph / IMAP 授权。适合没有现成 refresh_token、想自动授权的场景；授权成功后会写入邮箱列表。但是由于微软风控等原因，实际上很多账号导入进来就是自动授权不了的，这种情况用同一个IP先登录成功一次，后续应该就能自动授权了</div>
+                                    <div class="upload-accounts-guide__item-desc">只填邮箱+密码，由系统自动化登录微软完成授权（默认 GraphAPI，也可选手动切到 IMAP 授权）。适合没有现成 refresh_token、想自动授权的场景；授权成功后会写入邮箱列表。但是由于微软风控等原因，实际上很多账号导入进来就是自动授权不了的，这种情况用同一个IP先登录成功一次，后续应该就能自动授权了</div>
                                 </div>
                                 <div class="upload-accounts-guide__item">
                                     <div class="upload-accounts-guide__item-title">② 批量导入邮箱</div>
@@ -1292,7 +1292,7 @@
                                     </div>
                                 </div>
                                 <div class="form-hint" style="margin-top: 8px;">
-                                    分组 / 标签 / 账号代理会在<strong>首次授权成功并新建正式账号</strong>时写入；若正式账号已存在则仅更新授权信息，保留原分组/标签/代理。建议优先使用 <code>socks5://</code>：IMAP 令牌请求仅支持 HTTPS CONNECT / SOCKS5 代理，普通 HTTP 代理不可用。
+                                    分组 / 标签 / 账号代理会在<strong>首次授权成功并新建正式账号</strong>时写入；若正式账号已存在则仅更新授权信息，保留原分组/标签/代理。账号代理支持 <code>{mail}</code> 占位符，自动授权时也会按该邮箱展开并走代理。建议优先使用 <code>socks5h://</code>：IMAP 令牌请求仅支持 HTTPS CONNECT / SOCKS5 代理，普通 HTTP 代理不可用。
                                 </div>
                             </div>
                         </div>
@@ -1316,6 +1316,7 @@
                                 <button class="btn btn-secondary btn-sm" type="button" onclick="clearUploadAccountSelection()">清空</button>
                                 <button class="btn btn-primary btn-sm" type="button" id="batchAuthorizeUploadAccountsBtn" onclick="authorizeSelectedUploadAccounts()">批量授权</button>
                                 <button class="btn btn-danger btn-sm" type="button" id="batchDeleteUploadAccountsBtn" onclick="deleteSelectedUploadAccounts()">批量删除</button>
+                                <button class="btn btn-secondary btn-sm" type="button" id="batchExportUploadAccountsBtn" onclick="exportSelectedUploadAccounts()">批量导出</button>
                             </div>
                         </div>
                         <div class="upload-accounts-table-wrap">
@@ -1328,11 +1329,11 @@
                                                 onchange="toggleSelectVisibleUploadAccounts(this.checked)">
                                         </th>
                                         <th style="width: 200px; min-width: 160px;">邮箱</th>
-                                        <th style="width: 80px; min-width: 70px;">密码</th>
+                                        <th style="width: 160px; min-width: 100px;">密码</th>
                                         <th style="width: 72px; min-width: 72px;">授权</th>
-                                        <th style="width: 120px; min-width: 100px;">标签</th>
-                                        <th style="width: 180px; min-width: 160px;">账号代理</th>
-                                        <th style="width: 100px; min-width: 80px;">备注</th>
+                                        <th style="width: 160px; min-width: 100px;">标签</th>
+                                        <th style="width: 160px; min-width: 160px;">账号代理</th>
+                                        <th style="width: 80px; min-width: 80px;">备注</th>
                                         <th style="width: 130px; min-width: 120px;">创建时间</th>
                                         <th style="width: 210px; min-width: 210px;">操作</th>
                                     </tr>
@@ -1349,10 +1350,10 @@
                             <div class="upload-accounts-pagination__controls">
                                 <select id="uploadAccountsPageSizeSelect" class="form-input upload-accounts-pagination__select"
                                     aria-label="每页数量" onchange="handleUploadAccountsPageSizeChange(this.value)">
+                                    <option value="10">每页 10</option>
+                                    <option value="20" selected>每页 20</option>
+                                    <option value="50">每页 50</option>
                                     <option value="100">每页 100</option>
-                                    <option value="200" selected>每页 200</option>
-                                    <option value="500">每页 500</option>
-                                    <option value="1000">每页 1000</option>
                                 </select>
                                 <button class="btn btn-secondary" type="button" id="uploadAccountsPrevBtn"
                                     onclick="changeUploadAccountsPage(-1)">上一页</button>
@@ -1374,7 +1375,7 @@
                             </label>
                             <label class="upload-accounts-auth__mode-option">
                                 <input type="radio" name="graphAuthMode" value="graph" checked>
-                                <span>Graph-only（不含 IMAP 权限）</span>
+                                <span>GraphAPI</span>
                             </label>
                         </div>
                         <div id="graphAuthLog" class="upload-accounts-auth__log">点击账号「授权 / 重新授权」后，授权日志会显示在这里。</div>
@@ -1730,7 +1731,7 @@
             border: 1px solid var(--skin-border, #e5e7eb);
             border-radius: 8px;
             background: var(--skin-surface, #ffffff);
-            overflow: hidden;
+            overflow: visible;
         }
         .upload-accounts-add-panel__header {
             display: flex;
@@ -1768,7 +1769,7 @@
         }
         .upload-accounts-add-form {
             display: grid;
-            grid-template-columns: 1fr 140px 1fr 1fr;
+            grid-template-columns: 180px 120px 180px 150px 120px 120px 250px auto;
             gap: 12px;
             align-items: end;
         }
@@ -1795,8 +1796,6 @@
             height: 36px;
         }
         .add-form-field--action {
-            grid-column: 1 / -1;
-            padding-top: 0;
             align-items: stretch;
         }
         .add-form-submit {
