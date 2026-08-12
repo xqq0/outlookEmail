@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-08-08
+
+### Added
+- 登录页支持选择固定的登录有效期：7 天、30 天、90 天或 180 天，默认 30 天；有效期从登录成功起计算，后续访问不会续期。
+- 登录页会在当前浏览器本地记忆上次选择的登录有效期，浏览器扩展登录默认使用 30 天。
+
+## [3.0.2] - 2026-08-01
+
+### Fixed
+- 导出上传账号时解密 `refresh_token`（PR #73）：导出 TXT 文件时不再泄露加密的 `refresh_token`（会触发 Microsoft `AADSTS9002313 / invalid_grant`）。导出逻辑与 `password` 一致，先解密、失败留空。
+- 补充对应单元测试。
+
 ## [3.0.1] - 2026-07-28
 
 ### Added
