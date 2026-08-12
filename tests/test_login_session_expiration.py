@@ -148,8 +148,12 @@ class LoginSessionExpirationTests(unittest.TestCase):
         self.assertEqual(self._login(page_client, now, duration).status_code, 200)
         with patch.object(web_outlook_app, 'get_login_session_now', return_value=deadline):
             page_response = page_client.get('/')
-        self.assertEqual(page_response.status_code, 302)
-        self.assertTrue(page_response.headers['Location'].endswith('/login'))
+        self.assertEqual(page_response.status_code, 200)
+        self.assertIn('非凡的多邮箱管理系统', page_response.get_data(as_text=True))
+        self.assertIsNone(page_response.headers.get('Location'))
+        with page_client.session_transaction() as session:
+            self.assertFalse(session.get('logged_in'))
+            self.assertIsNone(session.get(web_outlook_app.LOGIN_SESSION_EXPIRATION_KEY))
 
         api_client = self.app.test_client()
         self.assertEqual(self._login(api_client, now, duration).status_code, 200)
