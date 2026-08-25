@@ -875,6 +875,91 @@ class NormalMailRetentionTests(unittest.TestCase):
         retained_ids = {row['provider_message_id'] for row in rows}
         self.assertEqual(retained_ids, {'old-uid-1', 'new-uid-2'})
 
+    def test_retained_imap_incremental_cursor_uses_highest_numeric_uid_per_folder(self):
+        rows = [
+            {'id': '41', 'id_mode': 'uid', 'folder': 'inbox', 'subject': 'older'},
+            {'id': '52', 'id_mode': 'uid', 'folder': 'inbox', 'subject': 'newer'},
+            {'id': 'not-numeric', 'id_mode': 'uid', 'folder': 'inbox', 'subject': 'ignored'},
+            {'id': '99', 'id_mode': 'uid', 'folder': 'junkemail', 'subject': 'other folder'},
+        ]
+        with self.app.app_context():
+            web_outlook_app.upsert_retained_normal_mail_list_items(
+                self.account, 'all', rows
+            )
+            cursor = web_outlook_app.get_retained_imap_incremental_cursor(
+                self.account, 'inbox'
+            )
+
+        self.assertEqual(cursor, 52)
+
+    def test_all_folder_incremental_resolves_uid_cursors_before_worker_threads(self):
+        rows = [
+            {'id': '52', 'id_mode': 'uid', 'folder': 'inbox', 'subject': 'inbox'},
+            {'id': '99', 'id_mode': 'uid', 'folder': 'junkemail', 'subject': 'junk'},
+        ]
+        imap_account = dict(self.account)
+        imap_account.update({
+            'account_type': 'imap',
+            'imap_password': 'secret',
+            'imap_host': 'imap.example.com',
+            'imap_port': 993,
+            'provider': 'custom',
+        })
+        with self.app.app_context():
+            web_outlook_app.upsert_retained_normal_mail_list_items(
+                imap_account, 'all', rows
+            )
+
+            with patch.object(
+                web_outlook_app,
+                'get_emails_imap_generic',
+                return_value={
+                    'success': True,
+                    'emails': [],
+                    'method': 'IMAP (Generic)',
+                    'has_more': False,
+                    'incremental': True,
+                },
+            ) as fetch_mock:
+                result = web_outlook_app.fetch_account_emails(
+                    imap_account, 'all', 0, 20, incremental=True
+                )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(fetch_mock.call_count, 2)
+        cursors_by_folder = {
+            call.args[4]: call.kwargs['since_uid']
+            for call in fetch_mock.call_args_list
+        }
+        self.assertEqual(cursors_by_folder, {'inbox': 52, 'junkemail': 99})
+
+    def test_remote_incremental_request_is_enabled_with_local_retention(self):
+        with self.app.app_context():
+            self.assertTrue(web_outlook_app.set_setting(
+                'normal_mail_local_retention_enabled',
+                'true',
+            ))
+
+        remote_result = {
+            'success': True,
+            'emails': [],
+            'method': 'IMAP',
+            'has_more': False,
+            'incremental': True,
+        }
+        with patch.object(
+            web_outlook_app,
+            'fetch_account_emails',
+            return_value=remote_result,
+        ) as fetch_mock:
+            response = self.client.get(
+                '/api/emails/retained@example.com?folder=inbox&skip=0&top=20&incremental=true'
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()['incremental_requested'])
+        self.assertTrue(fetch_mock.call_args.kwargs['incremental'])
+
     def test_local_retention_list_disabled_hides_seeded_rows_until_enabled(self):
         items = [{
             'id': 'disabled-local-row',

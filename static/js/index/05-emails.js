@@ -10,6 +10,7 @@
         const pendingNewMailSyncs = new Map();
         const BACKGROUND_MAIL_ERROR_MODAL_COOLDOWN_MS = 5 * 60 * 1000;
         let lastBackgroundMailErrorModal = { key: '', shownAt: 0 };
+        let mailSyncNoticeTimer = null;
         const normalDetailIframeResizeResources = { timers: [], observer: null };
         const fullscreenIframeResizeResources = { timers: [], observer: null };
         const NEW_EMAIL_HIGHLIGHT_CLEAR_DELAY_MS = 3500;
@@ -243,7 +244,6 @@
                 options: { ...options },
                 newlySyncedRows
             });
-            announceNewlySyncedEmailRows(data, newlySyncedRows, options.folder, syncKey);
             return mergedResult;
         }
 
@@ -302,7 +302,10 @@
         function applyMergedRemoteEmailSync(cacheKey, data, options = {}) {
             const syncKey = getPendingNewMailSyncKey(options.context?.account, options.context?.folder);
             if (options.announceNewRows === true && Number(data.new_count || 0) > 0) {
-                return queuePendingNewMailSync(syncKey, cacheKey, data, options);
+                const mergedResult = queuePendingNewMailSync(syncKey, cacheKey, data, options);
+                applyPendingNewMailSync(syncKey);
+                showMailSyncNotice(`已同步 ${Number(data.new_count)} 封新邮件`);
+                return mergedResult;
             }
 
             pendingNewMailSyncs.delete(syncKey);
@@ -402,7 +405,8 @@
                     method: requestMethod,
                     folder: requestFolder,
                     skip: 0,
-                    top: 20
+                    top: 20,
+                    ...(options.incremental === true ? { incremental: 'true' } : {})
                 }),
                 {
                     timeoutMs: EMAIL_LIST_REQUEST_TIMEOUT_MS,
@@ -418,6 +422,9 @@
                         applyMergedRemoteEmailSync(cacheKey, data, options);
                     } else {
                         applyEmailListResponse(cacheKey, data, options);
+                    }
+                    if (options.announceNoNewRows === true && Number(data.new_count || 0) === 0) {
+                        showMailSyncNotice('已是最新，没有新邮件');
                     }
                 }
                 return data;
@@ -455,7 +462,7 @@
             return false;
         }
 
-        function startBackgroundRemoteMailboxSync(email, cacheKey) {
+        function startBackgroundRemoteMailboxSync(email, cacheKey, options = {}) {
             const context = {
                 account: email,
                 folder: currentFolder
@@ -472,7 +479,9 @@
                 context,
                 mergeWithCurrentList: true,
                 announceNewRows: true,
-                preserveCurrentListOnError: true
+                announceNoNewRows: options.announceNoNewRows === true,
+                preserveCurrentListOnError: true,
+                incremental: true
             }).catch(error => {
                 if (isCurrentMailboxContext(context)) {
                     const browserError = buildBrowserMailFetchError(error);
@@ -497,6 +506,7 @@
             // 切换账号/刷新时清除选中状态
             selectedEmailIds.clear();
             updateEmailBatchActionBar();
+            highlightedNewEmailKeys = new Set();
             hideNewMailNotice();
             pendingNewMailSyncs.delete(getPendingNewMailSyncKey(email, currentFolder));
             setMailSyncStatus('');
@@ -516,7 +526,9 @@
 
             try {
                 if (isNormalMailboxListRequest() && await tryRenderLocalRetainedEmails(email, cacheKey)) {
-                    startBackgroundRemoteMailboxSync(email, cacheKey);
+                    startBackgroundRemoteMailboxSync(email, cacheKey, {
+                        announceNoNewRows: forceRefresh
+                    });
                     startedBackgroundSync = true;
                     return;
                 }
@@ -548,6 +560,10 @@
 
         function hideNewMailNotice() {
             const notice = document.getElementById('newMailNotice');
+            if (mailSyncNoticeTimer) {
+                window.clearTimeout(mailSyncNoticeTimer);
+                mailSyncNoticeTimer = null;
+            }
             if (!notice) {
                 return;
             }
@@ -559,6 +575,22 @@
             notice.removeAttribute('tabindex');
             notice.onclick = null;
             notice.onkeydown = null;
+        }
+
+        function showMailSyncNotice(message) {
+            const notice = document.getElementById('newMailNotice');
+            if (!notice || !message) {
+                hideNewMailNotice();
+                return;
+            }
+
+            hideNewMailNotice();
+            notice.hidden = false;
+            notice.setAttribute('role', 'status');
+            notice.textContent = message;
+            mailSyncNoticeTimer = window.setTimeout(() => {
+                hideNewMailNotice();
+            }, NEW_EMAIL_HIGHLIGHT_CLEAR_DELAY_MS);
         }
 
         function getNewMessageIdKeys(newMessageIds, fallbackFolder = currentFolder) {
@@ -583,35 +615,6 @@
             return Number(data.new_count || 0) > 0 ? mergeResult.newEmails : [];
         }
 
-        function showNewMailNotice(newCount, syncKey = getPendingNewMailSyncKey()) {
-            const notice = document.getElementById('newMailNotice');
-            if (!notice || newCount <= 0) {
-                hideNewMailNotice();
-                return;
-            }
-
-            const acceptPendingSync = () => applyPendingNewMailSync(syncKey);
-            notice.hidden = false;
-            notice.setAttribute('role', 'button');
-            notice.setAttribute('tabindex', '0');
-            notice.dataset.syncKey = syncKey;
-            notice.onclick = acceptPendingSync;
-            notice.onkeydown = event => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    acceptPendingSync();
-                }
-            };
-            notice.replaceChildren();
-            const message = document.createElement('span');
-            message.textContent = `有 ${Number(newCount)} 封新邮件已同步`;
-            const hint = document.createElement('span');
-            hint.className = 'new-mail-notice__hint';
-            hint.textContent = '点击显示';
-            notice.append(message, hint);
-        }
-
-
         function markNewlySyncedEmailRows(rows, fallbackFolder = currentFolder) {
             highlightedNewEmailKeys = new Set();
             rows.forEach(emailItem => {
@@ -629,17 +632,6 @@
                     item.classList.remove('newly-synced');
                 });
             }, NEW_EMAIL_HIGHLIGHT_CLEAR_DELAY_MS);
-        }
-
-        function announceNewlySyncedEmailRows(data, rows, fallbackFolder = currentFolder, syncKey = getPendingNewMailSyncKey()) {
-            const reportedCount = Number(data.new_count || 0);
-            const visibleCount = reportedCount > 0 ? reportedCount : rows.length;
-            if (visibleCount <= 0) {
-                hideNewMailNotice();
-                return;
-            }
-
-            showNewMailNotice(visibleCount, syncKey);
         }
 
         function buildBodyRetentionItems(rows, fallbackFolder = currentFolder) {

@@ -2677,16 +2677,20 @@ class FrontendTimezoneBootstrapTests(unittest.TestCase):
         self.assertIn("invalidateNormalMailRetentionCaches({ resetCurrentView: true });", settings_js)
         self.assertIn('wasRetentionEnabled && !normalMailLocalRetentionEnabled', settings_js)
 
-    def test_new_mail_notice_stages_rows_until_user_accepts(self):
+    def test_new_mail_sync_auto_inserts_and_only_highlights_current_load(self):
         emails_js = pathlib.Path(ROOT_DIR, 'static', 'js', 'index', '05-emails.js').read_text(encoding='utf-8')
 
         queue_start = emails_js.index('function queuePendingNewMailSync')
         apply_start = emails_js.index('function applyPendingNewMailSync')
         queue_block = emails_js[queue_start:apply_start]
-        apply_block = emails_js[apply_start:emails_js.index('function applyMergedRemoteEmailSync')]
+        merge_start = emails_js.index('function applyMergedRemoteEmailSync')
+        apply_block = emails_js[apply_start:merge_start]
+        merge_block = emails_js[merge_start:emails_js.index('async function tryRenderLocalRetainedEmails')]
+        load_start = emails_js.index('async function loadEmails(email, forceRefresh = false)')
+        load_block = emails_js[load_start:emails_js.index('// 渲染邮件列表', load_start)]
 
         self.assertIn('pendingNewMailSyncs.set(syncKey', queue_block)
-        self.assertIn('announceNewlySyncedEmailRows(data, newlySyncedRows, options.folder, syncKey);', queue_block)
+        self.assertNotIn('announceNewlySyncedEmailRows(', queue_block)
         self.assertNotIn('currentEmails =', queue_block)
         self.assertNotIn('renderEmailList(currentEmails);', queue_block)
         self.assertNotIn('mergedEmails:', queue_block)
@@ -2696,13 +2700,16 @@ class FrontendTimezoneBootstrapTests(unittest.TestCase):
         self.assertIn('renderEmailList(currentEmails);', apply_block)
         self.assertIn('requestBodyRetentionForNewRows(newlySyncedRows, pending.options.folder);', apply_block)
         self.assertIn('scheduleNewEmailHighlightClear();', apply_block)
+        self.assertIn('queuePendingNewMailSync(syncKey, cacheKey, data, options);', merge_block)
+        self.assertIn('applyPendingNewMailSync(syncKey);', merge_block)
+        self.assertIn('showMailSyncNotice(`已同步 ${Number(data.new_count)} 封新邮件`);', merge_block)
+        self.assertIn('highlightedNewEmailKeys = new Set();', load_block)
+        self.assertIn('announceNoNewRows: forceRefresh', load_block)
+        self.assertIn("showMailSyncNotice('已是最新，没有新邮件');", emails_js)
+        self.assertIn("notice.setAttribute('role', 'status');", emails_js)
+        self.assertNotIn("hint.textContent = '点击显示';", emails_js)
 
-        self.assertIn("notice.setAttribute('role', 'button');", emails_js)
-        self.assertIn("notice.setAttribute('tabindex', '0');", emails_js)
-        self.assertIn('notice.replaceChildren();', emails_js)
-        self.assertIn("hint.textContent = '点击显示';", emails_js)
         self.assertIn('NEW_EMAIL_HIGHLIGHT_CLEAR_DELAY_MS', emails_js)
-        self.assertNotIn('已自动显示', emails_js)
         self.assertNotIn('cacheRemoteEmailSyncResult', emails_js)
 
     def test_provider_fallback_uses_id_mode_for_detail_raw_and_attachments(self):

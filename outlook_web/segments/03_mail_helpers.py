@@ -1133,12 +1133,12 @@ def get_emails_imap_with_server(account: str, client_id: str, refresh_token: str
         emails = []
         for msg_id in paged_ids:
             try:
-                status, msg_data = connection.fetch(msg_id, '(INTERNALDATE RFC822)')
+                status, msg_data = connection.fetch(msg_id, IMAP_LIST_FETCH_QUERY)
                 if status == 'OK' and msg_data and msg_data[0]:
-                    raw_email = msg_data[0][1]
-                    internal_date = extract_imap_internaldate(msg_data[0][0])
-                    msg = email.message_from_bytes(raw_email)
-                    body_preview = get_email_body(msg)
+                    msg, fetch_response_text, body_preview, has_attachments = parse_imap_list_fetch_response(msg_data)
+                    if msg is None:
+                        continue
+                    internal_date = extract_imap_internaldate(fetch_response_text)
 
                     emails.append({
                         'id': msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
@@ -1147,7 +1147,9 @@ def get_emails_imap_with_server(account: str, client_id: str, refresh_token: str
                         'to': decode_header_value(msg.get("To", "")),
                         'date': internal_date or msg.get("Date", "未知时间"),
                         'id_mode': 'sequence',
-                        'body_preview': body_preview[:200] + "..." if len(body_preview) > 200 else body_preview
+                        'is_read': bool(re.search(r'\\Seen\b', fetch_response_text, flags=re.IGNORECASE)),
+                        'has_attachments': has_attachments,
+                        'body_preview': body_preview,
                     })
             except Exception:
                 continue
@@ -1941,6 +1943,91 @@ def parse_imap_fetch_response(data: Any) -> tuple[bytes | None, str]:
     return raw_email, ' '.join(fragment for fragment in response_fragments if fragment).strip()
 
 
+IMAP_LIST_PREVIEW_BYTES = 2048
+IMAP_LIST_FETCH_QUERY = (
+    '(FLAGS INTERNALDATE BODYSTRUCTURE '
+    'BODY.PEEK[HEADER.FIELDS (SUBJECT FROM TO DATE)] '
+    f'BODY.PEEK[TEXT]<0.{IMAP_LIST_PREVIEW_BYTES}>)'
+)
+
+
+def imap_bodystructure_has_attachments(response_text: str) -> bool:
+    """Return whether compact IMAP BODYSTRUCTURE metadata describes an attachment."""
+    normalized = str(response_text or '')
+    return bool(re.search(
+        r'"?ATTACHMENT"?|"(?:FILENAME|NAME)"\s+"[^"]+"',
+        normalized,
+        flags=re.IGNORECASE,
+    ))
+
+
+def parse_imap_list_fetch_response(data: Any) -> tuple[Any, str, str, bool]:
+    """Parse a metadata-only list FETCH while accepting legacy RFC822 fixtures."""
+    header_payloads: List[bytes] = []
+    preview_payloads: List[bytes] = []
+    legacy_payload = None
+    response_fragments: List[str] = []
+    items = data if isinstance(data, (list, tuple)) else [data]
+
+    for item in items:
+        if item is None:
+            continue
+        if not isinstance(item, tuple):
+            if isinstance(item, memoryview):
+                item = item.tobytes()
+            if isinstance(item, (bytes, bytearray)):
+                response_fragments.append(bytes(item).decode('utf-8', errors='ignore'))
+            else:
+                response_fragments.append(str(item))
+            continue
+
+        head = item[0] if item else b''
+        if isinstance(head, memoryview):
+            head = head.tobytes()
+        head_text = (
+            bytes(head).decode('utf-8', errors='ignore')
+            if isinstance(head, (bytes, bytearray))
+            else str(head or '')
+        )
+        response_fragments.append(head_text)
+        upper_head = head_text.upper()
+
+        for payload in item[1:]:
+            if isinstance(payload, memoryview):
+                payload = payload.tobytes()
+            if not isinstance(payload, (bytes, bytearray)) or not payload:
+                if payload is not None:
+                    response_fragments.append(str(payload))
+                continue
+
+            payload_bytes = bytes(payload)
+            if 'HEADER.FIELDS' in upper_head or 'RFC822.HEADER' in upper_head:
+                header_payloads.append(payload_bytes)
+            elif 'BODY[TEXT]' in upper_head or 'BODY.PEEK[TEXT]' in upper_head:
+                preview_payloads.append(payload_bytes)
+            elif 'RFC822' in upper_head:
+                legacy_payload = payload_bytes
+
+    response_text = ' '.join(fragment for fragment in response_fragments if fragment).strip()
+    if legacy_payload is not None:
+        message = email.message_from_bytes(legacy_payload)
+        body_text, body_html = extract_text_and_html(message)
+        preview_source = body_text or strip_html_content(body_html)
+        preview = preview_source[:200] + ('...' if len(preview_source) > 200 else '')
+        return message, response_text, preview, has_message_attachments(message)
+
+    if not header_payloads:
+        return None, response_text, '', imap_bodystructure_has_attachments(response_text)
+
+    header_bytes = b'\r\n'.join(header_payloads).rstrip(b'\r\n') + b'\r\n\r\n'
+    preview_bytes = b'\r\n'.join(preview_payloads)
+    message = email.message_from_bytes(header_bytes + preview_bytes)
+    body_text, body_html = extract_text_and_html(message)
+    preview_source = body_text or strip_html_content(body_html)
+    preview = preview_source[:200] + ('...' if len(preview_source) > 200 else '')
+    return message, response_text, preview, imap_bodystructure_has_attachments(response_text)
+
+
 def fetch_imap_message(mail, message_id: Any, query: str, preferred_mode: str = 'uid') -> tuple[str, Any, str, List[Dict[str, Any]]]:
     message_text = message_id.decode('utf-8', errors='ignore') if isinstance(message_id, (bytes, bytearray)) else str(message_id)
     modes = [preferred_mode]
@@ -2368,7 +2455,7 @@ def delete_emails_imap_generic_result(email_addr: str, imap_password: str, imap_
 def get_emails_imap_generic(email_addr: str, imap_password: str, imap_host: str,
                             imap_port: int = 993, folder: str = 'inbox',
                             provider: str = 'custom', skip: int = 0, top: int = 20,
-                            proxy_url: str = '') -> Dict[str, Any]:
+                            proxy_url: str = '', since_uid: Optional[int] = None) -> Dict[str, Any]:
     mail = None
     imap_id_info = {}
     try:
@@ -2443,8 +2530,40 @@ def get_emails_imap_generic(email_addr: str, imap_password: str, imap_host: str,
             message_ids = build_sequence_message_ids(selected_exists)
             search_mode = 'sequence'
 
+        incremental = False
+        normalized_since_uid = None
+        try:
+            normalized_since_uid = max(0, int(since_uid)) if since_uid is not None else None
+        except (TypeError, ValueError):
+            normalized_since_uid = None
+
+        if normalized_since_uid is not None and search_mode == 'uid' and message_ids:
+            numeric_message_ids = []
+            for message_id in message_ids:
+                try:
+                    numeric_message_ids.append((int(message_id), message_id))
+                except (TypeError, ValueError):
+                    numeric_message_ids = []
+                    break
+
+            if numeric_message_ids:
+                remote_max_uid = max(uid for uid, _message_id in numeric_message_ids)
+                if remote_max_uid >= normalized_since_uid:
+                    message_ids = [
+                        message_id
+                        for uid, message_id in numeric_message_ids
+                        if uid > normalized_since_uid
+                    ]
+                    incremental = True
+
         if not message_ids:
-            return {'success': True, 'emails': [], 'method': 'IMAP (Generic)', 'has_more': False}
+            return {
+                'success': True,
+                'emails': [],
+                'method': 'IMAP (Generic)',
+                'has_more': False,
+                'incremental': incremental,
+            }
 
         total = len(message_ids)
         start_idx = max(0, total - skip - top)
@@ -2457,19 +2576,15 @@ def get_emails_imap_generic(email_addr: str, imap_password: str, imap_host: str,
         for uid in paged_uids:
             try:
                 f_status, f_data, fetch_mode, _fetch_attempts = fetch_imap_message(
-                    mail, uid, '(FLAGS INTERNALDATE RFC822)', preferred_mode=search_mode or 'uid'
+                    mail, uid, IMAP_LIST_FETCH_QUERY, preferred_mode=search_mode or 'uid'
                 )
                 if f_status != 'OK' or not f_data:
                     continue
-                raw_email, fetch_response_text = parse_imap_fetch_response(f_data)
-                if not raw_email:
+                msg, fetch_response_text, preview, has_attachments = parse_imap_list_fetch_response(f_data)
+                if msg is None:
                     continue
                 internal_date = extract_imap_internaldate(fetch_response_text)
 
-                msg = email.message_from_bytes(raw_email)
-                body_text, body_html = extract_text_and_html(msg)
-                preview_source = body_text or strip_html_content(body_html)
-                preview = preview_source[:200] + ('...' if len(preview_source) > 200 else '')
                 emails_data.append({
                     'id': uid.decode('utf-8', errors='ignore') if isinstance(uid, (bytes, bytearray)) else str(uid),
                     'subject': decode_header_value(msg.get('Subject', '无主题')),
@@ -2478,7 +2593,7 @@ def get_emails_imap_generic(email_addr: str, imap_password: str, imap_host: str,
                     'date': internal_date or msg.get('Date', ''),
                     'id_mode': search_mode or 'uid',
                     'is_read': bool(re.search(r'\\Seen\b', fetch_response_text, flags=re.IGNORECASE)),
-                    'has_attachments': has_message_attachments(msg),
+                    'has_attachments': has_attachments,
                     'body_preview': preview,
                 })
             except Exception:
@@ -2489,7 +2604,8 @@ def get_emails_imap_generic(email_addr: str, imap_password: str, imap_host: str,
             'success': True,
             'emails': emails_data,
             'method': 'IMAP (Generic)',
-            'has_more': start_idx > 0
+            'has_more': start_idx > 0,
+            'incremental': incremental,
         }
     except Exception as exc:
         return {

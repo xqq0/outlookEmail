@@ -1674,8 +1674,22 @@ def handle_remote_email_list_request(account: Dict[str, Any], requested_email: s
                                      from_contains: str, keyword: str):
     skip = parse_non_negative_int(request.args.get('skip', 0), 0)
     top = parse_non_negative_int(request.args.get('top', 20), 20, 50)
-    result = fetch_account_emails(account, folder, skip, top)
+    incremental_requested = (
+        str(request.args.get('incremental', '') or '').strip().lower() == 'true'
+        and skip == 0
+        and not subject_contains
+        and not from_contains
+        and not keyword
+        and is_normal_mail_local_retention_enabled()
+    )
+    fetch_args = (account, folder, skip, top)
+    if incremental_requested:
+        result = fetch_account_emails(*fetch_args, incremental=True)
+    else:
+        result = fetch_account_emails(*fetch_args)
     if result.get('success'):
+        if incremental_requested:
+            result['incremental_requested'] = True
         if is_normal_mail_local_retention_enabled():
             if skip == 0:
                 new_message_ids = find_new_retained_normal_mail_identifiers(

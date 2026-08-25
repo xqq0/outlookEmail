@@ -300,6 +300,187 @@ class ImapFolderResolutionTests(unittest.TestCase):
         self.assertEqual(result['emails'][0]['subject'], 'seen-mail')
         self.assertTrue(mail.logged_out)
 
+    def test_generic_imap_list_fetches_compact_metadata_instead_of_full_rfc822(self):
+        raw_headers = (
+            b"Subject: compact-list\r\n"
+            b"From: sender@example.com\r\n"
+            b"To: user@example.com\r\n"
+            b"Date: Tue, 14 Apr 2026 08:20:50 +0000\r\n"
+            b"\r\n"
+        )
+
+        class CompactListMail(FakeMail):
+            def __init__(self):
+                super().__init__(selectable={'INBOX'})
+                self.fetch_queries = []
+
+            def uid(self, command, *args, **kwargs):
+                if command == 'SEARCH':
+                    return 'OK', [b'21']
+                if command == 'FETCH':
+                    self.fetch_queries.append(args[1])
+                    return 'OK', [
+                        (
+                            b'21 (FLAGS (\\Seen) INTERNALDATE "14-Apr-2026 08:20:50 +0000" '
+                            b'BODYSTRUCTURE ("APPLICATION" "PDF" ("NAME" "invoice.pdf") NIL NIL "BASE64" 4096 NIL '
+                            b'("ATTACHMENT" ("FILENAME" "invoice.pdf")) NIL NIL) '
+                            b'BODY[HEADER.FIELDS (SUBJECT FROM TO DATE)] {140}',
+                            raw_headers,
+                        ),
+                        (b' BODY[TEXT]<0> {24}', b'compact preview content'),
+                        b')',
+                    ]
+                return super().uid(command, *args, **kwargs)
+
+        mail = CompactListMail()
+        with patch.object(web_outlook_app, 'create_imap_connection', return_value=mail):
+            result = web_outlook_app.get_emails_imap_generic(
+                email_addr='user@example.com',
+                imap_password='secret',
+                imap_host='imap.example.com',
+                provider='custom',
+                folder='inbox',
+            )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(len(result['emails']), 1)
+        self.assertEqual(result['emails'][0]['subject'], 'compact-list')
+        self.assertEqual(result['emails'][0]['body_preview'], 'compact preview content')
+        self.assertTrue(result['emails'][0]['has_attachments'])
+        self.assertTrue(result['emails'][0]['is_read'])
+        self.assertEqual(len(mail.fetch_queries), 1)
+        self.assertIn('BODYSTRUCTURE', mail.fetch_queries[0])
+        self.assertIn('BODY.PEEK[HEADER.FIELDS', mail.fetch_queries[0])
+        self.assertIn('BODY.PEEK[TEXT]<0.2048>', mail.fetch_queries[0])
+        self.assertNotIn('RFC822', mail.fetch_queries[0])
+
+    def test_generic_imap_incremental_fetch_only_reads_uids_newer_than_local_cursor(self):
+        class IncrementalMail(FakeMail):
+            def __init__(self):
+                super().__init__(selectable={'INBOX'})
+                self.fetched_uids = []
+
+            def uid(self, command, *args, **kwargs):
+                if command == 'SEARCH':
+                    return 'OK', [b'40 41 42']
+                if command == 'FETCH':
+                    uid = args[0]
+                    uid_text = uid.decode('utf-8') if isinstance(uid, bytes) else str(uid)
+                    self.fetched_uids.append(uid_text)
+                    raw_email = (
+                        f"Subject: message-{uid_text}\r\n"
+                        "From: sender@example.com\r\n"
+                        "To: user@example.com\r\n"
+                        "Date: Tue, 14 Apr 2026 08:20:50 +0000\r\n"
+                        "\r\n"
+                        "preview\r\n"
+                    ).encode('utf-8')
+                    fetch_metadata = (
+                        f'{uid_text} (FLAGS () INTERNALDATE "14-Apr-2026 08:20:50 +0000" '
+                        f'RFC822 {{{len(raw_email)}}}'
+                    ).encode('utf-8')
+                    return 'OK', [(fetch_metadata, raw_email)]
+                return super().uid(command, *args, **kwargs)
+
+        mail = IncrementalMail()
+        with patch.object(web_outlook_app, 'create_imap_connection', return_value=mail):
+            result = web_outlook_app.get_emails_imap_generic(
+                email_addr='user@example.com',
+                imap_password='secret',
+                imap_host='imap.example.com',
+                provider='custom',
+                folder='inbox',
+                since_uid=41,
+            )
+
+        self.assertTrue(result['success'])
+        self.assertTrue(result['incremental'])
+        self.assertEqual([item['id'] for item in result['emails']], ['42'])
+        self.assertEqual(mail.fetched_uids, ['42'])
+
+    def test_generic_imap_incremental_fetch_skips_message_fetch_when_no_new_uid_exists(self):
+        class NoNewMail(FakeMail):
+            def __init__(self):
+                super().__init__(selectable={'INBOX'})
+                self.fetch_count = 0
+
+            def uid(self, command, *args, **kwargs):
+                if command == 'SEARCH':
+                    return 'OK', [b'40 41 42']
+                if command == 'FETCH':
+                    self.fetch_count += 1
+                return super().uid(command, *args, **kwargs)
+
+        mail = NoNewMail()
+        with patch.object(web_outlook_app, 'create_imap_connection', return_value=mail):
+            result = web_outlook_app.get_emails_imap_generic(
+                email_addr='user@example.com',
+                imap_password='secret',
+                imap_host='imap.example.com',
+                provider='custom',
+                folder='inbox',
+                since_uid=42,
+            )
+
+        self.assertTrue(result['success'])
+        self.assertTrue(result['incremental'])
+        self.assertEqual(result['emails'], [])
+        self.assertEqual(mail.fetch_count, 0)
+
+    def test_outlook_oauth_imap_list_uses_the_same_compact_fetch(self):
+        raw_headers = (
+            b"Subject: oauth-compact-list\r\n"
+            b"From: sender@outlook.com\r\n"
+            b"To: user@outlook.com\r\n"
+            b"Date: Tue, 14 Apr 2026 08:20:50 +0000\r\n"
+            b"\r\n"
+        )
+
+        class OAuthCompactListMail(FakeMail):
+            def __init__(self):
+                super().__init__(selectable={'INBOX'})
+                self.fetch_queries = []
+
+            def authenticate(self, *_args, **_kwargs):
+                return 'OK', [b'authenticated']
+
+            def search(self, *_args, **_kwargs):
+                return 'OK', [b'31']
+
+            def fetch(self, _message_id, query):
+                self.fetch_queries.append(query)
+                return 'OK', [
+                    (
+                        b'31 (FLAGS () INTERNALDATE "14-Apr-2026 08:20:50 +0000" '
+                        b'BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 17 1) '
+                        b'BODY[HEADER.FIELDS (SUBJECT FROM TO DATE)] {140}',
+                        raw_headers,
+                    ),
+                    (b' BODY[TEXT]<0> {17}', b'oauth list preview'),
+                    b')',
+                ]
+
+        mail = OAuthCompactListMail()
+        with patch.object(
+            web_outlook_app,
+            'get_access_token_imap_result',
+            return_value={'success': True, 'access_token': 'token'},
+        ), patch.object(web_outlook_app.imaplib, 'IMAP4_SSL', return_value=mail):
+            result = web_outlook_app.get_emails_imap_with_server(
+                account='user@outlook.com',
+                client_id='client-id',
+                refresh_token='refresh-token',
+                folder='inbox',
+            )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['emails'][0]['subject'], 'oauth-compact-list')
+        self.assertEqual(result['emails'][0]['body_preview'], 'oauth list preview')
+        self.assertFalse(result['emails'][0]['has_attachments'])
+        self.assertEqual(len(mail.fetch_queries), 1)
+        self.assertIn('BODYSTRUCTURE', mail.fetch_queries[0])
+        self.assertNotIn('RFC822', mail.fetch_queries[0])
+
     def test_parse_email_datetime_accepts_parenthesized_timezone_name(self):
         parsed = web_outlook_app.parse_email_datetime('Tue, 14 Apr 2026 08:20:50 +0000 (UTC)')
 

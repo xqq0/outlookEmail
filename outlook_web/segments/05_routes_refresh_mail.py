@@ -3568,6 +3568,9 @@ def merge_folder_results(results: Dict[str, Dict[str, Any]], skip: int, top: int
         'method': ' / '.join(unique_methods) if unique_methods else '',
         'has_more': has_more or len(merged) > skip + top,
         'folder_summaries': folder_summaries,
+        'incremental': bool(successful) and all(
+            bool(result.get('incremental')) for result in successful.values()
+        ),
     }
     if partial_errors:
         response['partial'] = True
@@ -3575,8 +3578,36 @@ def merge_folder_results(results: Dict[str, Dict[str, Any]], skip: int, top: int
     return response
 
 
+def get_retained_imap_incremental_cursor(account: Dict[str, Any], folder: str) -> Optional[int]:
+    """Return the highest locally retained UID for a mailbox folder."""
+    account_id = int((account or {}).get('id') or 0)
+    folder_name = normalize_folder_name(folder)
+    if not account_id or folder_name not in VALID_MAIL_FOLDERS or folder_name == 'all':
+        return None
+
+    rows = get_db().execute(
+        '''
+        SELECT provider_message_id
+        FROM retained_normal_mail_messages
+        WHERE account_id = ?
+          AND folder = ?
+          AND id_mode = 'uid'
+          AND list_cached = 1
+        ''',
+        (account_id, folder_name)
+    ).fetchall()
+    retained_uids = []
+    for row in rows:
+        raw_uid = str(row['provider_message_id'] or '').strip()
+        if raw_uid.isdigit():
+            retained_uids.append(int(raw_uid))
+    return max(retained_uids) if retained_uids else None
+
+
 def fetch_account_folder_emails(account: Dict[str, Any], folder: str, skip: int, top: int,
-                                proxy_url: str = '', fallback_proxy_urls: List[str] = None) -> Dict[str, Any]:
+                                proxy_url: str = '', fallback_proxy_urls: List[str] = None,
+                                incremental: bool = False,
+                                since_uid: Optional[int] = None) -> Dict[str, Any]:
     folder_name = normalize_folder_name(folder)
     if folder_name not in VALID_MAIL_FOLDERS or folder_name == 'all':
         return {
@@ -3594,7 +3625,8 @@ def fetch_account_folder_emails(account: Dict[str, Any], folder: str, skip: int,
             account.get('provider', 'custom'),
             skip,
             top,
-            proxy_url
+            proxy_url=proxy_url,
+            since_uid=since_uid,
         )
         if result.get('success'):
             return {
@@ -3603,6 +3635,7 @@ def fetch_account_folder_emails(account: Dict[str, Any], folder: str, skip: int,
                 'method': result.get('method', 'IMAP (Generic)'),
                 'has_more': bool(result.get('has_more')),
                 'request_method': 'imap',
+                'incremental': bool(result.get('incremental')),
             }
         return {
             'success': False,
@@ -3692,7 +3725,8 @@ def fetch_account_folder_emails(account: Dict[str, Any], folder: str, skip: int,
     }
 
 
-def fetch_account_emails(account: Dict[str, Any], folder: str, skip: int, top: int) -> Dict[str, Any]:
+def fetch_account_emails(account: Dict[str, Any], folder: str, skip: int, top: int,
+                         incremental: bool = False) -> Dict[str, Any]:
     proxy_url = get_account_proxy_url(account)
     fallback_proxy_urls = get_account_proxy_failover_urls(account)
     folder_name = normalize_folder_name(folder)
@@ -3705,11 +3739,19 @@ def fetch_account_emails(account: Dict[str, Any], folder: str, skip: int, top: i
     if folder_name == 'all':
         merged_top = max(1, min(100, top * 2))
         folder_jobs = ('inbox', 'junkemail')
+        incremental_cursors = {}
+        if incremental and account.get('account_type') == 'imap':
+            # Flask's application context is not inherited by ThreadPoolExecutor
+            # workers, so resolve retained UID cursors before starting them.
+            incremental_cursors = {
+                folder_job: get_retained_imap_incremental_cursor(account, folder_job)
+                for folder_job in folder_jobs
+            }
         results = {}
         executor = ThreadPoolExecutor(max_workers=len(folder_jobs), thread_name_prefix='mail-folder-fetch')
-        future_map = {
-            folder_job: executor.submit(
-                fetch_account_folder_emails,
+        future_map = {}
+        for folder_job in folder_jobs:
+            fetch_args = (
                 account,
                 folder_job,
                 skip,
@@ -3717,8 +3759,15 @@ def fetch_account_emails(account: Dict[str, Any], folder: str, skip: int, top: i
                 proxy_url,
                 fallback_proxy_urls,
             )
-            for folder_job in folder_jobs
-        }
+            if incremental:
+                future_map[folder_job] = executor.submit(
+                    fetch_account_folder_emails,
+                    *fetch_args,
+                    incremental=True,
+                    since_uid=incremental_cursors.get(folder_job),
+                )
+            else:
+                future_map[folder_job] = executor.submit(fetch_account_folder_emails, *fetch_args)
         try:
             done, not_done = wait(future_map.values(), timeout=MAIL_FETCH_OVERALL_TIMEOUT)
             for folder_job, future in future_map.items():
@@ -3758,7 +3807,17 @@ def fetch_account_emails(account: Dict[str, Any], folder: str, skip: int, top: i
             merged_top
         )
 
-    return fetch_account_folder_emails(account, folder_name, skip, top, proxy_url, fallback_proxy_urls)
+    fetch_args = (account, folder_name, skip, top, proxy_url, fallback_proxy_urls)
+    if incremental:
+        since_uid = None
+        if account.get('account_type') == 'imap':
+            since_uid = get_retained_imap_incremental_cursor(account, folder_name)
+        return fetch_account_folder_emails(
+            *fetch_args,
+            incremental=True,
+            since_uid=since_uid,
+        )
+    return fetch_account_folder_emails(*fetch_args)
 
 
 @app.route('/api/emails/<email_addr>')
