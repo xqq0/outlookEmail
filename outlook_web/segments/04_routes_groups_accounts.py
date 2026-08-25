@@ -225,6 +225,7 @@ def index():
         changelog_url=CHANGELOG_URL,
         frontend_asset_hash=get_frontend_asset_hash(),
         skin_asset_hash=get_active_skin_asset_hash(),
+        mail_fetch_timeout_seconds=get_mail_fetch_timeout_seconds(),
     ))
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
@@ -1310,6 +1311,7 @@ def api_get_account(account_id):
             'refresh_token': account['refresh_token'],
             'account_type': account.get('account_type', 'outlook'),
             'provider': account.get('provider', 'outlook'),
+            'authorization_type': get_account_authorization_type(account),
             'imap_host': account.get('imap_host', ''),
             'imap_port': account.get('imap_port', 993),
             'has_imap_password': bool(account.get('imap_password')),
@@ -1484,6 +1486,16 @@ def api_update_account(account_id):
     refresh_token = data.get('refresh_token', '')
     account_type = data.get('account_type', 'outlook')
     provider = data.get('provider', 'outlook')
+    if 'authorization_type' in data:
+        try:
+            authorization_type = normalize_outlook_authorization_type(
+                data.get('authorization_type'),
+                strict=True,
+            )
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)})
+    else:
+        authorization_type = get_account_authorization_type(current_account)
     imap_host = (data.get('imap_host', '') or '').strip()
     imap_port = data.get('imap_port', 993)
     imap_password = data['imap_password'] if 'imap_password' in data else current_account.get('imap_password', '')
@@ -1538,7 +1550,8 @@ def api_update_account(account_id):
     if update_account(
         account_id, email_addr, password, client_id, refresh_token, group_id, sort_order, remark, status,
         account_type, provider, imap_host, imap_port, imap_password, forward_enabled,
-        proxy_url, fallback_proxy_url_1, fallback_proxy_url_2
+        proxy_url, fallback_proxy_url_1, fallback_proxy_url_2,
+        authorization_type
     ):
         cleaned_aliases = get_account_aliases(account_id)
         db = get_db()
