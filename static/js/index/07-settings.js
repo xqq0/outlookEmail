@@ -1412,7 +1412,10 @@
                     document.getElementById('editFallbackProxyUrl2').value = acc.fallback_proxy_url_2 || '';
                     document.getElementById('editSortOrder').value = Number(acc.sort_order || 0);
                     document.getElementById('editRemark').value = acc.remark || '';
-                    document.getElementById('editAliases').value = Array.isArray(acc.aliases) ? acc.aliases.join('\n') : '';
+                    const managedAliases = new Set(acc.managed_aliases || []);
+                    document.getElementById('editAliases').value = (acc.aliases || []).filter(alias => !managedAliases.has(alias)).join('\n');
+                    document.getElementById('editManagedAliases').textContent = managedAliases.size
+                        ? `iCloud 托管别名（只读，请前往 iCloud 管理）：${[...managedAliases].join('、')}` : '';
                     document.getElementById('editStatus').value = acc.status || 'active';
                     if (document.getElementById('editForwardEnabled')) {
                         document.getElementById('editForwardEnabled').checked = !!acc.forward_enabled;
@@ -1807,6 +1810,8 @@
                     document.getElementById('settingsApiKey').value = data.settings.gptmail_api_key || '';
                     document.getElementById('settingsExternalApiKey').value = data.settings.external_api_key || '';
                     document.getElementById('settingsOauthClientId').value = data.settings.oauth_client_id || '';
+                    document.getElementById('settingsExternalApiKeyPermission').value =
+                        data.settings.external_api_key_permission === 'readwrite' ? 'readwrite' : 'readonly';
                     document.getElementById('settingsDuckmailBaseUrl').value = data.settings.duckmail_base_url || '';
                     document.getElementById('settingsDuckmailApiKey').value = data.settings.duckmail_api_key || '';
                     document.getElementById('settingsCloudflareAiEnabled').checked = String(data.settings.cloudflare_ai_username_enabled) === 'true';
@@ -1839,6 +1844,7 @@
                     document.getElementById('settingsShowAccountCreatedAt').checked = String(data.settings.show_account_created_at) !== 'false';
                     document.getElementById('settingsShowAccountSortOrder').checked = String(data.settings.show_account_sort_order) === 'true';
                     document.getElementById('settingsShowGroupId').checked = String(data.settings.show_group_id) !== 'false';
+                    document.getElementById('settingsShowProjectManagement').checked = String(data.settings.show_project_management) === 'true';
                     const retentionEnabled = parseSettingsBoolean(data.settings.normal_mail_local_retention_enabled);
                     document.getElementById('normalMailLocalRetentionEnabled').checked = retentionEnabled;
                     setNormalMailLocalRetentionEnabled(retentionEnabled);
@@ -1849,6 +1855,7 @@
                     document.getElementById('forwardAccountDelaySeconds').value = data.settings.forward_account_delay_seconds || '0';
                     document.getElementById('forwardEmailWindowMinutes').value = data.settings.forward_email_window_minutes || '0';
                     document.getElementById('forwardIncludeJunkemail').checked = String(data.settings.forward_include_junkemail) === 'true';
+                    document.getElementById('forwardKeywords').value = data.settings.forward_keywords || '';
                     document.getElementById('settingsEmailForwardRecipient').value = data.settings.email_forward_recipient || '';
                     document.getElementById('settingsSmtpHost').value = data.settings.smtp_host || '';
                     document.getElementById('settingsSmtpPort').value = data.settings.smtp_port || '465';
@@ -1863,6 +1870,7 @@
                     document.getElementById('settingsTelegramTopicId').value = data.settings.telegram_topic_id || '';
                     document.getElementById('settingsTelegramProxyUrl').value = data.settings.telegram_proxy_url || '';
                     document.getElementById('settingsWecomWebhookUrl').value = data.settings.wecom_webhook_url || '';
+                    setFeishuForwardingSettings(data.settings);
                     document.getElementById('webdavBackupEnabled').checked = String(data.settings.webdav_backup_enabled) === 'true';
                     document.getElementById('webdavBackupUrl').value = data.settings.webdav_backup_url || '';
                     document.getElementById('webdavBackupUsername').value = data.settings.webdav_backup_username || '';
@@ -1906,6 +1914,7 @@
             const showAccountCreatedAt = !!document.getElementById('settingsShowAccountCreatedAt')?.checked;
             const showAccountSortOrder = !!document.getElementById('settingsShowAccountSortOrder')?.checked;
             const showGroupId = !!document.getElementById('settingsShowGroupId')?.checked;
+            const showProjectManagement = !!document.getElementById('settingsShowProjectManagement')?.checked;
             const normalMailLocalRetentionEnabled = !!document.getElementById('normalMailLocalRetentionEnabled')?.checked;
             const settings = {};
             const forwardChannels = getSelectedForwardChannels();
@@ -1939,11 +1948,14 @@
 
             settings.gptmail_api_key = apiKey;
             settings.external_api_key = externalApiKey;
-            if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(oauthClientId)) {
-                showToast('OAuth2 Client ID 必须是有效的 UUID', 'error');
-                return;
+            if (oauthClientId) {
+                if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(oauthClientId)) {
+                    showToast('OAuth2 Client ID 必须是有效的 UUID', 'error');
+                    return;
+                }
+                settings.oauth_client_id = oauthClientId;
             }
-            settings.oauth_client_id = oauthClientId;
+            settings.external_api_key_permission = document.getElementById('settingsExternalApiKeyPermission')?.value || 'readonly';
             settings.duckmail_base_url = document.getElementById('settingsDuckmailBaseUrl').value.trim();
             settings.duckmail_api_key = document.getElementById('settingsDuckmailApiKey').value.trim();
             settings.cloudflare_ai_username_enabled = !!document.getElementById('settingsCloudflareAiEnabled')?.checked;
@@ -1980,6 +1992,7 @@
             const telegramTopicId = document.getElementById('settingsTelegramTopicId').value.trim();
             const telegramProxyUrl = document.getElementById('settingsTelegramProxyUrl').value.trim();
             const wecomWebhookUrl = document.getElementById('settingsWecomWebhookUrl').value.trim();
+            const feishuDraft = getFeishuForwardingDraftConfig();
             const webdavBackupSettings = getWebdavBackupFormSettings();
             const webdavBackupChanged = hasWebdavBackupSettingsChanged(webdavBackupSettings);
             const webdavBackupVerifyPassword = document.getElementById('webdavBackupVerifyPassword')?.value || '';
@@ -2052,6 +2065,10 @@
                 showToast('启用企业微信转发时必须填写 Webhook 地址', 'error');
                 return;
             }
+            if (forwardChannels.includes('feishu') && !hasFeishuWebhook(feishuDraft)) {
+                showToast('启用飞书转发时必须填写 Webhook 地址', 'error');
+                return;
+            }
             if (webdavBackupChanged) {
                 if (!webdavBackupVerifyPassword) {
                     showToast('修改 WebDAV 备份设置需要输入登录密码', 'error');
@@ -2088,6 +2105,7 @@
             settings.show_account_created_at = showAccountCreatedAt;
             settings.show_account_sort_order = showAccountSortOrder;
             settings.show_group_id = showGroupId;
+            settings.show_project_management = showProjectManagement;
             settings.normal_mail_local_retention_enabled = normalMailLocalRetentionEnabled;
             settings.forward_channels = forwardChannels;
             settings.forward_check_interval_seconds = forwardSeconds;
@@ -2097,6 +2115,7 @@
             settings.forward_account_delay_seconds = forwardAccountDelaySeconds;
             settings.forward_email_window_minutes = forwardWindowMinutes;
             settings.forward_include_junkemail = forwardIncludeJunkemail;
+            settings.forward_keywords = document.getElementById('forwardKeywords').value;
             settings.email_forward_recipient = smtpRecipient;
             settings.smtp_host = smtpHost;
             settings.smtp_port = Number.isNaN(smtpPort) ? 465 : smtpPort;
@@ -2111,6 +2130,9 @@
             settings.telegram_topic_id = telegramTopicId;
             settings.telegram_proxy_url = telegramProxyUrl;
             settings.wecom_webhook_url = wecomWebhookUrl;
+            settings.feishu_webhook_url = feishuDraft.webhook_url;
+            settings.feishu_sign_secret = feishuDraft.sign_secret;
+            settings.feishu_clear_sign_secret = feishuDraft.clear_sign_secret;
 
             if (webdavBackupChanged) {
                 Object.assign(settings, webdavBackupSettings);
@@ -2164,6 +2186,7 @@
             setShowAccountCreatedAt(showAccountCreatedAt);
             setShowAccountSortOrder(showAccountSortOrder);
             setShowGroupId(showGroupId);
+            setShowProjectManagement(showProjectManagement);
             setMailFetchTimeoutSeconds(mailFetchTimeoutSeconds);
             setNormalMailLocalRetentionEnabled(normalMailLocalRetentionEnabled);
             if (wasRetentionEnabled && !normalMailLocalRetentionEnabled
@@ -2215,6 +2238,36 @@
             hideSettingsModal();
         }
 
+        function setFeishuForwardingSettings(settings) {
+            for (const [id, key] of [
+                ['settingsFeishuWebhookUrl', 'feishu_webhook_url'],
+                ['settingsFeishuSignSecret', 'feishu_sign_secret'],
+            ]) {
+                const input = document.getElementById(id);
+                input.value = '';
+                input.dataset.configured = String(!!settings[`${key}_configured`]);
+                input.placeholder = settings[`${key}_configured`]
+                    ? '已配置，留空保留；填写新值替换'
+                    : (key === 'feishu_webhook_url'
+                        ? 'https://open.feishu.cn/open-apis/bot/v2/hook/...'
+                        : '可选，填写机器人签名校验密钥');
+            }
+            document.getElementById('settingsFeishuClearSignSecret').checked = false;
+        }
+
+        function getFeishuForwardingDraftConfig() {
+            return {
+                webhook_url: document.getElementById('settingsFeishuWebhookUrl').value.trim(),
+                sign_secret: document.getElementById('settingsFeishuSignSecret').value.trim(),
+                clear_sign_secret: document.getElementById('settingsFeishuClearSignSecret').checked,
+            };
+        }
+
+        function hasFeishuWebhook(draft) {
+            return !!draft.webhook_url
+                || document.getElementById('settingsFeishuWebhookUrl').dataset.configured === 'true';
+        }
+
         function buildForwardingDraftConfig() {
             const smtpPortValue = document.getElementById('settingsSmtpPort').value.trim();
             const smtpPort = parseInt(smtpPortValue || '465', 10);
@@ -2238,16 +2291,17 @@
                 },
                 wecom: {
                     webhook_url: document.getElementById('settingsWecomWebhookUrl').value.trim(),
-                }
+                },
+                feishu: getFeishuForwardingDraftConfig(),
             };
         }
 
         async function testForwardChannel(channel) {
-            const btn = document.getElementById(
-                channel === 'smtp'
-                    ? 'testSmtpBtn'
-                    : (channel === 'telegram' ? 'testTelegramBtn' : 'testWecomBtn')
-            );
+            const buttonIds = {
+                smtp: 'testSmtpBtn', telegram: 'testTelegramBtn',
+                wecom: 'testWecomBtn', feishu: 'testFeishuBtn',
+            };
+            const btn = document.getElementById(buttonIds[channel]);
             if (!btn || btn.disabled) return;
 
             const draft = buildForwardingDraftConfig();
@@ -2284,6 +2338,11 @@
             } else if (channel === 'wecom') {
                 if (!draft.wecom.webhook_url) {
                     showToast('请先填写企业微信 Webhook 地址', 'error');
+                    return;
+                }
+            } else if (channel === 'feishu') {
+                if (!hasFeishuWebhook(draft.feishu)) {
+                    showToast('请先填写飞书 Webhook 地址', 'error');
                     return;
                 }
             } else {
