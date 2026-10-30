@@ -690,7 +690,7 @@ class EmailShareLinkTests(unittest.TestCase):
                 if command == 'FETCH':
                     return 'OK', [
                         (
-                            b'42 (FLAGS () INTERNALDATE "14-Apr-2026 10:00:00 +0000" '
+                            b'42 (UID 42 FLAGS () INTERNALDATE "14-Apr-2026 10:00:00 +0000" '
                             b'BODYSTRUCTURE ("TEXT" "PLAIN" NIL NIL NIL "7BIT" 6 1 NIL NIL NIL) '
                             b'BODY[HEADER.FIELDS (SUBJECT FROM TO DATE)] {96}',
                             raw_headers,
