@@ -1051,21 +1051,6 @@
             }
         }
 
-        function ensureEditForwardToggle() {
-            if (document.getElementById('editForwardEnabled')) return;
-            const statusGroup = document.getElementById('editStatus')?.closest('.form-group');
-            if (!statusGroup) return;
-            statusGroup.insertAdjacentHTML('afterend', `
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="editForwardEnabled">
-                        <span class="form-label" style="margin: 0;">启用邮件转发</span>
-                    </label>
-                    <div class="form-hint">开启后会按系统设置转发到邮箱或 Telegram。</div>
-                </div>
-            `);
-        }
-
         function renderImportTagOptions() {
             const container = document.getElementById('importTagFilterOptions');
             if (!container) return;
@@ -1109,14 +1094,47 @@
         function resetImportDefaults() {
             const remarkInput = document.getElementById('importRemark');
             const statusSelect = document.getElementById('importStatus');
-            const forwardInput = document.getElementById('importForwardEnabled');
             const tagDropdown = document.getElementById('importTagFilterDropdown');
 
             if (remarkInput) remarkInput.value = '';
             if (statusSelect) statusSelect.value = 'active';
-            if (forwardInput) forwardInput.checked = false;
+            setGraphScopeFieldValue('importGraphScopeSelect', 'importGraphScopeCustom', '');
             tagDropdown?.classList.remove('open');
             renderImportTagOptions();
+        }
+
+        function syncGraphScopeCustomVisibility(selectId, customId) {
+            const select = document.getElementById(selectId);
+            const custom = document.getElementById(customId);
+            if (!select || !custom) return;
+            const isCustom = select.value === '__custom__';
+            custom.style.display = isCustom ? '' : 'none';
+            if (isCustom) custom.focus();
+        }
+
+        function resolveGraphScopeFieldValue(selectId, customId) {
+            const select = document.getElementById(selectId);
+            if (!select) return '';
+            if (select.value === '__custom__') {
+                return (document.getElementById(customId)?.value || '').trim();
+            }
+            return select.value;
+        }
+
+        function setGraphScopeFieldValue(selectId, customId, value) {
+            const select = document.getElementById(selectId);
+            const custom = document.getElementById(customId);
+            if (!select) return;
+            const normalized = String(value || '').trim();
+            const optionValues = Array.from(select.options).map(option => option.value);
+            if (normalized && !optionValues.includes(normalized)) {
+                select.value = '__custom__';
+                if (custom) custom.value = normalized;
+            } else {
+                select.value = normalized;
+                if (custom) custom.value = '';
+            }
+            if (custom) custom.style.display = select.value === '__custom__' ? '' : 'none';
         }
 
         function getImportSelectedTagIds() {
@@ -1228,7 +1246,6 @@
             const cloudflareChannelId = document.getElementById('importCloudflareChannelSelect')?.value || '';
             const imapHost = document.getElementById('importImapHost')?.value.trim() || '';
             const imapPort = parseInt(document.getElementById('importImapPort')?.value || '993', 10);
-            const forwardEnabled = !!document.getElementById('importForwardEnabled')?.checked;
             const remark = document.getElementById('importRemark')?.value.trim() || '';
             const status = document.getElementById('importStatus')?.value || 'active';
             const tagIds = getImportSelectedTagIds();
@@ -1355,10 +1372,12 @@
                             provider,
                             imap_host: imapHost,
                             imap_port: Number.isFinite(imapPort) ? imapPort : 993,
-                            forward_enabled: forwardEnabled,
                             remark,
                             status,
-                            tag_ids: tagIds
+                            tag_ids: tagIds,
+                            graph_token_scope: provider === 'outlook'
+                                ? resolveGraphScopeFieldValue('importGraphScopeSelect', 'importGraphScopeCustom')
+                                : ''
                         })
                     });
                 }
@@ -1389,7 +1408,6 @@
 
         async function showEditAccountModal(accountId) {
             try {
-                ensureEditForwardToggle();
                 const response = await fetch(`/api/accounts/${accountId}`);
                 const data = await response.json();
 
@@ -1402,6 +1420,7 @@
                     resetEditSecretInput('editPassword', 'revealEditPasswordBtn', !!acc.has_password, acc.password || '', '可选');
                     document.getElementById('editClientId').value = acc.client_id || '';
                     document.getElementById('editAuthorizationType').value = acc.authorization_type || '';
+                    setGraphScopeFieldValue('editGraphScopeSelect', 'editGraphScopeCustom', acc.graph_token_scope || '');
                     document.getElementById('editRefreshToken').value = acc.refresh_token || '';
                     resetEditSecretInput('editImapPassword', 'revealEditImapPasswordBtn', !!acc.has_imap_password, acc.imap_password || '', '');
                     document.getElementById('editImapHost').value = acc.imap_host || '';
@@ -1417,9 +1436,6 @@
                     document.getElementById('editManagedAliases').textContent = managedAliases.size
                         ? `iCloud 托管别名（只读，请前往 iCloud 管理）：${[...managedAliases].join('、')}` : '';
                     document.getElementById('editStatus').value = acc.status || 'active';
-                    if (document.getElementById('editForwardEnabled')) {
-                        document.getElementById('editForwardEnabled').checked = !!acc.forward_enabled;
-                    }
                     if (document.getElementById('editProviderSelect')) {
                         document.getElementById('editProviderSelect').value = acc.provider || (acc.account_type === 'imap' ? 'custom' : 'outlook');
                     }
@@ -1454,6 +1470,9 @@
                 client_id: document.getElementById('editClientId').value.trim(),
                 refresh_token: document.getElementById('editRefreshToken').value.trim(),
                 authorization_type: document.getElementById('editAuthorizationType')?.value || '',
+                graph_token_scope: isOutlook
+                    ? resolveGraphScopeFieldValue('editGraphScopeSelect', 'editGraphScopeCustom')
+                    : '',
                 account_type: isOutlook ? 'outlook' : 'imap',
                 provider,
                 imap_host: document.getElementById('editImapHost')?.value.trim() || '',
@@ -1469,7 +1488,6 @@
                     .map(item => item.trim())
                     .filter(Boolean),
                 status: document.getElementById('editStatus').value,
-                forward_enabled: !!document.getElementById('editForwardEnabled')?.checked,
                 tag_ids: getEditSelectedTagIds()
             };
             if (shouldSubmitSecretInput(passwordInput)) {
@@ -1573,6 +1591,7 @@
                         </div>
                     </div>
                     <button class="btn btn-secondary" type="button" onclick="editCloudflareChannel(${Number(channel.id)})">编辑</button>
+                    <button class="btn btn-secondary" type="button" onclick="openForwardingSource('cloudflare_worker', ${Number(channel.id)})">通知设置</button>
                 </div>
             `).join('');
         }
@@ -1848,6 +1867,7 @@
                     const retentionEnabled = parseSettingsBoolean(data.settings.normal_mail_local_retention_enabled);
                     document.getElementById('normalMailLocalRetentionEnabled').checked = retentionEnabled;
                     setNormalMailLocalRetentionEnabled(retentionEnabled);
+                    if (typeof isDedicatedForwardingUI !== 'function' || !isDedicatedForwardingUI()) {
                     const fallbackForwardSeconds = String((parseInt(data.settings.forward_check_interval_minutes || '5', 10) || 5) * 60);
                     document.getElementById('forwardCheckIntervalSeconds').value = data.settings.forward_check_interval_seconds || fallbackForwardSeconds;
                     document.getElementById('forwardExecutionMode').value = data.settings.forward_execution_mode === 'parallel' ? 'parallel' : 'serial';
@@ -1855,7 +1875,7 @@
                     document.getElementById('forwardAccountDelaySeconds').value = data.settings.forward_account_delay_seconds || '0';
                     document.getElementById('forwardEmailWindowMinutes').value = data.settings.forward_email_window_minutes || '0';
                     document.getElementById('forwardIncludeJunkemail').checked = String(data.settings.forward_include_junkemail) === 'true';
-                    document.getElementById('forwardKeywords').value = data.settings.forward_keywords || '';
+                    }
                     document.getElementById('settingsEmailForwardRecipient').value = data.settings.email_forward_recipient || '';
                     document.getElementById('settingsSmtpHost').value = data.settings.smtp_host || '';
                     document.getElementById('settingsSmtpPort').value = data.settings.smtp_port || '465';
@@ -1917,7 +1937,8 @@
             const showProjectManagement = !!document.getElementById('settingsShowProjectManagement')?.checked;
             const normalMailLocalRetentionEnabled = !!document.getElementById('normalMailLocalRetentionEnabled')?.checked;
             const settings = {};
-            const forwardChannels = getSelectedForwardChannels();
+            const namedForwardingUI = typeof usesNamedForwardingSettings === 'function' && usesNamedForwardingSettings();
+            const forwardChannels = namedForwardingUI ? [] : getSelectedForwardChannels();
 
             if (password) {
                 if (!currentPassword) {
@@ -2013,6 +2034,7 @@
                 showToast('邮件获取超时必须在 30-300 秒之间', 'error');
                 return;
             }
+            if (typeof isDedicatedForwardingUI !== 'function' || !isDedicatedForwardingUI()) {
             if (Number.isNaN(forwardSeconds) || forwardSeconds < 20 || forwardSeconds > 3600) {
                 showToast('转发轮询间隔必须在 20-3600 秒之间', 'error');
                 return;
@@ -2032,6 +2054,7 @@
             if (Number.isNaN(forwardWindowMinutes) || forwardWindowMinutes < 0 || forwardWindowMinutes > 10080) {
                 showToast('转发邮件时间范围必须在 0-10080 分钟之间', 'error');
                 return;
+            }
             }
             if (forwardChannels.includes('smtp') && !smtpRecipient) {
                 showToast('启用 SMTP 转发时必须填写转发到邮箱', 'error');
@@ -2057,7 +2080,7 @@
                 showToast('启用 TG 转发时必须填写 Telegram Chat ID', 'error');
                 return;
             }
-            if (telegramTopicId && !/^\d+$/.test(telegramTopicId)) {
+            if (!namedForwardingUI && telegramTopicId && !/^\d+$/.test(telegramTopicId)) {
                 showToast('Telegram Topic ID 必须是纯数字', 'error');
                 return;
             }
@@ -2115,7 +2138,6 @@
             settings.forward_account_delay_seconds = forwardAccountDelaySeconds;
             settings.forward_email_window_minutes = forwardWindowMinutes;
             settings.forward_include_junkemail = forwardIncludeJunkemail;
-            settings.forward_keywords = document.getElementById('forwardKeywords').value;
             settings.email_forward_recipient = smtpRecipient;
             settings.smtp_host = smtpHost;
             settings.smtp_port = Number.isNaN(smtpPort) ? 465 : smtpPort;
@@ -2133,6 +2155,7 @@
             settings.feishu_webhook_url = feishuDraft.webhook_url;
             settings.feishu_sign_secret = feishuDraft.sign_secret;
             settings.feishu_clear_sign_secret = feishuDraft.clear_sign_secret;
+            if (namedForwardingUI) omitLegacyForwardingFields(settings);
 
             if (webdavBackupChanged) {
                 Object.assign(settings, webdavBackupSettings);
